@@ -49,6 +49,53 @@ const theme = createTheme({
         },
       },
     },
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: {
+          backgroundColor: "#ffffff",
+          transition: "background-color 150ms ease, box-shadow 150ms ease",
+          "& .MuiOutlinedInput-notchedOutline": {
+            borderColor: "rgba(0, 0, 0, 0.23)",
+            transition: "border-color 150ms ease",
+          },
+          "&:hover": {
+            backgroundColor: "#fafafa",
+            "& .MuiOutlinedInput-notchedOutline": {
+              borderColor: "rgba(0, 0, 0, 0.55)",
+            },
+          },
+          "&.Mui-focused": {
+            backgroundColor: "#ffffff",
+            boxShadow: "0 0 0 3px rgba(0, 0, 0, 0.08)",
+            "& .MuiOutlinedInput-notchedOutline": {
+              borderColor: "#000000",
+              borderWidth: 2,
+            },
+          },
+          "&.Mui-focused:hover .MuiOutlinedInput-notchedOutline": {
+            borderColor: "#000000",
+          },
+          "& input:-webkit-autofill, & textarea:-webkit-autofill": {
+            WebkitBoxShadow: "0 0 0 1000px #ffffff inset",
+            WebkitTextFillColor: "#171717",
+            caretColor: "#171717",
+            transition: "background-color 99999s ease-out 0s",
+          },
+        },
+        input: {
+          color: "#171717",
+        },
+      },
+    },
+    MuiInputLabel: {
+      styleOverrides: {
+        root: {
+          "&.Mui-focused": {
+            color: "#000000",
+          },
+        },
+      },
+    },
   },
 });
 
