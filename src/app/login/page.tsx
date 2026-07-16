@@ -12,6 +12,7 @@ import {
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import AuthBrandHeader from "../components/AuthBrandHeader";
+import { API } from "../hooks/useCurrentUser";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -24,15 +25,12 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001"}/auth/login`,
-        {
+      const res = await fetch(`${API}/auth/login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password }),
           credentials: "include",
-        }
-      );
+        });
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));

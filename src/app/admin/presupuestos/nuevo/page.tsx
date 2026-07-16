@@ -271,7 +271,7 @@ export default function NuevoPresupuestoPage() {
         body: JSON.stringify({
           name: newClient.name,
           email: newClient.email,
-          password: newClient.password || undefined,
+          password: newClient.password,
           country: market,
           taxRate: newClient.taxExempt ? 0 : newClient.taxRate,
           taxExempt: newClient.taxExempt,
@@ -279,7 +279,7 @@ export default function NuevoPresupuestoPage() {
         }),
       });
       if (!res.ok) throw new Error(await readApiError(res, "No se pudo crear el cliente"));
-      const created = (await res.json()) as ClientOption & { temporaryPassword?: string };
+      const created = (await res.json()) as ClientOption;
       setClients((prev) => [created, ...prev]);
       setSelectedClient(created);
       setClientDialogOpen(false);
@@ -681,12 +681,14 @@ export default function NuevoPresupuestoPage() {
               />
             </Stack>
             <TextField
-              label="Contraseña temporal (opcional)"
+              label="Contraseña"
               size="small"
               type="password"
+              required
               value={newClient.password}
               onChange={(e) => setNewClient((c) => ({ ...c, password: e.target.value }))}
-              helperText="Si se omite, se genera una automática"
+              helperText="Mínimo 8 caracteres. Compártela al cliente por canal seguro."
+              inputProps={{ minLength: 8 }}
             />
             <TextField
               select

@@ -120,7 +120,7 @@ public/logo/
 
 ## Local full stack
 
-1. Start Postgres + API in `dekorama-be` (`docker compose up -d`, `npm run seed`, `npm run start:dev`).
-2. Point FE `.env` at `http://localhost:3001`.
+1. Start Postgres + API in `dekorama-be` (`docker compose up -d`, set `ADMIN_*` in `.env`, `npm run seed`, `npm run start:dev`).
+2. FE `.env`: `NEXT_PUBLIC_API_BASE_URL=/api` and `API_PROXY_TARGET=http://localhost:3001` (or direct BE URL for local-only).
 3. `npm run dev` here.
-4. Login with seed admin: `admin@dekorama.com` / `admin123!` (see backend README for other seed users).
+4. Login with the admin credentials you set in `ADMIN_EMAIL` / `ADMIN_PASSWORD`.

@@ -21,8 +21,7 @@ import { FormEvent, useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import AuthBrandHeader from "../components/AuthBrandHeader";
 import { MARKET_OPTIONS, MARKETS, isMarketCode, type MarketCode } from "../utils/market";
-
-const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001";
+import { API } from "../hooks/useCurrentUser";
 
 interface InvitationInfo {
   organizerName?: string;

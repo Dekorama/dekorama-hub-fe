@@ -16,7 +16,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatMarketBadge } from "../utils/market";
-import { useCurrentUser } from "../hooks/useCurrentUser";
+import { useCurrentUser, API } from "../hooks/useCurrentUser";
 import { ProjectFormWizard } from "./components/ProjectFormWizard";
 import { Project, STATUS_LABELS, formatAddress } from "./types";
 
@@ -35,7 +35,7 @@ export default function ProyectosPage() {
   const [open, setOpen] = useState(false);
 
   const fetchProjects = () => {
-    fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001"}/projects`, { credentials: "include" })
+    fetch(`${API}/projects`, { credentials: "include" })
       .then((r) => r.json())
       .then(setProjects)
       .finally(() => setLoadingProjects(false));

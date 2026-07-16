@@ -3,6 +3,9 @@
 
 [build.environment]
   NODE_VERSION = "22"
+  # Set in Netlify UI too:
+  # NEXT_PUBLIC_API_BASE_URL=/api
+  # API_PROXY_TARGET=https://dekorama-hub-be.onrender.com
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
