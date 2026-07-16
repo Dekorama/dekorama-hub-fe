@@ -1,36 +1,61 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## RanchOps MVP
 
-## Getting Started
+Frontend (Next.js + Material UI) y backend (NestJS + Postgres) para el MVP descrito en `RanchOps — Technical MVP Overview`.
 
-First, run the development server:
+### Frontend (`ranchops-fe`)
+
+- **Stack**: Next.js (App Router), React, Material UI.
+- **Pantallas**:
+  - **Landing** en `/` con explicación del MVP y CTA a login/registro.
+  - **Login** en `/login`.
+  - **Registro** en `/registro`.
+  - **Dashboard** mínimo en `/dashboard` (requiere sesión).
+
+#### Ejecutar frontend
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cd ranchops-fe
+npm install    # instala Next, React, MUI, etc.
+npm run dev    # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- **Config API**: la URL base del backend se configura con `NEXT_PUBLIC_API_BASE_URL` (por defecto `http://localhost:3001`).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Backend (`ranchops-be`)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **Stack**: NestJS, TypeORM, Postgres.
+- **Módulos**:
+  - **Auth**: registro, login, logout, `me`.
+  - **Users**: entidad `User` (email, nombre, password hash).
+- **Sesión**: cookie HTTP-only `ranchops_session` con el `userId` (KISS, sin JWT para el MVP).
 
-## Learn More
+#### Variables de entorno sugeridas
 
-To learn more about Next.js, take a look at the following resources:
+En `ranchops-be`:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+PORT=3001
+FRONTEND_ORIGIN=http://localhost:3000
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=postgres
+DB_NAME=ranchops
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+#### Ejecutar backend
 
-## Deploy on Vercel
+```bash
+cd ranchops-be
+npm install        # instala NestJS, TypeORM, pg, etc.
+npm run build
+npm start          # API en http://localhost:3001
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Endpoints principales del MVP:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **POST** `/auth/register` – crear usuario.
+- **POST** `/auth/login` – iniciar sesión y setear cookie de sesión.
+- **POST** `/auth/logout` – limpiar cookie.
+- **GET** `/auth/me` – devolver usuario actual (MVP muy simple).
+
