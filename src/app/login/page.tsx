@@ -11,6 +11,7 @@ import {
 } from "@mui/material";
 import Link from "next/link";
 import { FormEvent, useState } from "react";
+import AuthBrandHeader from "../components/AuthBrandHeader";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -49,6 +50,7 @@ export default function LoginPage() {
   return (
     <Container maxWidth="sm" sx={{ minHeight: "100vh", display: "flex", alignItems: "center", px: { xs: 2, sm: 3 } }}>
       <Paper sx={{ p: { xs: 3, sm: 4 }, width: "100%", borderRadius: 3 }}>
+        <AuthBrandHeader />
         <Typography variant="h5" fontWeight={700} gutterBottom>
           Iniciar sesión
         </Typography>

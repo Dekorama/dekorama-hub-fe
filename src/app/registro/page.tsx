@@ -19,6 +19,7 @@ import {
 import Link from "next/link";
 import { FormEvent, useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import AuthBrandHeader from "../components/AuthBrandHeader";
 import { MARKET_OPTIONS, MARKETS, isMarketCode, type MarketCode } from "../utils/market";
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001";
@@ -194,6 +195,7 @@ function RegistroForm() {
     return (
       <Container maxWidth="sm" sx={{ minHeight: "100vh", display: "flex", alignItems: "center" }}>
         <Paper sx={{ p: 4, width: "100%", borderRadius: 3 }}>
+          <AuthBrandHeader />
           <Alert severity="error" sx={{ mb: 2 }}>
             {tokenError}
           </Alert>
@@ -208,6 +210,7 @@ function RegistroForm() {
   return (
     <Container maxWidth="sm" sx={{ minHeight: "100vh", display: "flex", alignItems: "center", py: { xs: 3, sm: 0 }, px: { xs: 2, sm: 3 } }}>
       <Paper sx={{ p: { xs: 3, sm: 4 }, width: "100%", borderRadius: 3 }}>
+        <AuthBrandHeader />
         <Typography variant="h5" fontWeight={700} gutterBottom>
           {invitationInfo
             ? adminToken
