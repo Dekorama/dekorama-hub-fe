@@ -22,8 +22,9 @@ import {
   Tooltip,
 } from "@mui/material";
 import { Verified, ShoppingCart } from "@mui/icons-material";
-import { AppShell } from "../../../components/AppShell";
-import { useCurrentUser, API } from "../../../hooks/useCurrentUser";
+import { useCurrentUser, API } from "../../hooks/useCurrentUser";
+import { useAppSnackbar } from "../../hooks/useAppSnackbar";
+import { usePageTitle } from "../../components/PageTitleContext";
 
 interface PortfolioProject {
   id: string;
@@ -68,6 +69,9 @@ export default function ProfessionalProfilePage() {
   const [selectedProduct, setSelectedProduct] = useState<ProductTag["product"] | null>(null);
   const [cartQuantity, setCartQuantity] = useState(1);
   const [addingToCart, setAddingToCart] = useState(false);
+  const { showSuccess, showError, SnackbarHost } = useAppSnackbar();
+
+  usePageTitle(professional ? `Perfil: ${professional.name}` : "Perfil Profesional");
 
   useEffect(() => {
     if (!userId) return;
@@ -112,9 +116,9 @@ export default function ProfessionalProfilePage() {
 
       setSelectedProduct(null);
       setCartQuantity(1);
-      alert("✅ Producto agregado al carrito");
+      showSuccess("Producto agregado al carrito");
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Error al agregar al carrito");
+      showError(err instanceof Error ? err.message : "Error al agregar al carrito");
     } finally {
       setAddingToCart(false);
     }
@@ -122,27 +126,22 @@ export default function ProfessionalProfilePage() {
 
   if (loading || authLoading) {
     return (
-      <AppShell title="Perfil Profesional" user={user}>
-        <Container sx={{ display: "flex", justifyContent: "center", mt: 8 }}>
-          <CircularProgress />
-        </Container>
-      </AppShell>
+      <Container sx={{ display: "flex", justifyContent: "center", mt: 8 }}>
+        <CircularProgress />
+      </Container>
     );
   }
 
   if (error || !professional) {
     return (
-      <AppShell title="Perfil Profesional" user={user}>
-        <Container maxWidth="md" sx={{ mt: 4 }}>
-          <Alert severity="error">{error || "Profesional no encontrado"}</Alert>
-        </Container>
-      </AppShell>
+      <Container maxWidth="md" sx={{ mt: 4 }}>
+        <Alert severity="error">{error || "Profesional no encontrado"}</Alert>
+      </Container>
     );
   }
 
   return (
-    <AppShell title={`Perfil: ${professional.name}`} user={user}>
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 8 }}>
+    <Container maxWidth="lg" sx={{ mt: 4, mb: 8 }}>
         {/* Professional Header */}
         <Paper elevation={3} sx={{ p: 4, mb: 4 }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 3 }}>
@@ -298,7 +297,7 @@ export default function ProfessionalProfilePage() {
             </Button>
           </DialogActions>
         </Dialog>
+        <SnackbarHost />
       </Container>
-    </AppShell>
   );
 }

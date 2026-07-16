@@ -4,18 +4,17 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   Chip,
   CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControl,
+  FormControlLabel,
   IconButton,
-  InputLabel,
   MenuItem,
   Paper,
-  Select,
   Stack,
   Tab,
   Table,
@@ -29,12 +28,15 @@ import {
   ToggleButtonGroup,
   Typography,
 } from "@mui/material";
-import { Add, Delete, Edit, PictureAsPdf, Visibility } from "@mui/icons-material";
+import { Add, Delete, PictureAsPdf, Visibility } from "@mui/icons-material";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AppShell } from "../components/AppShell";
-import { useCurrentUser, API } from "../hooks/useCurrentUser";
+import { API } from "../hooks/useCurrentUser";
 import { AdminInvitationsTab } from "./components/AdminInvitationsTab";
+import { AdminTabPanel } from "./components/AdminTabPanel";
+import { useAdminMarket } from "./context/AdminMarketContext";
+import { adminApiUrl } from "./utils/adminApi";
+import { LabeledSelect } from "../components/LabeledSelect";
 
 interface PendingUser {
   id: string;
@@ -44,6 +46,8 @@ interface PendingUser {
   isVerified: boolean;
   createdAt: string;
   profileData: any;
+  taxRate?: number | null;
+  taxExempt?: boolean;
 }
 
 interface Invoice {
@@ -74,9 +78,11 @@ interface Invoice {
 
 interface Proposal {
   id: string;
-  projectId: string;
-  project: { title: string; clientId: string };
-  professionalId: string;
+  projectId: string | null;
+  project: { title: string; clientId: string } | null;
+  clientId: string | null;
+  title: string | null;
+  professionalId: string | null;
   laborCost: number;
   message: string | null;
   status: string;
@@ -90,8 +96,8 @@ interface LineItemForm {
 }
 
 export default function AdminPage() {
-  const { user, loading: userLoading } = useCurrentUser();
   const router = useRouter();
+  const { market, config } = useAdminMarket();
   const [tab, setTab] = useState(0);
 
   // Professionals
@@ -114,6 +120,7 @@ export default function AdminPage() {
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split("T")[0]);
   const [dueDate, setDueDate] = useState("");
   const [taxRate, setTaxRate] = useState(16);
+  const [taxExempt, setTaxExempt] = useState(false);
   const [notes, setNotes] = useState("");
   const [lineItems, setLineItems] = useState<LineItemForm[]>([
     { description: "", productSku: "", quantity: 1, unitPrice: 0 },
@@ -124,8 +131,12 @@ export default function AdminPage() {
   const [deleteInvoiceDialog, setDeleteInvoiceDialog] = useState(false);
   const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null);
 
+  useEffect(() => {
+    setTaxRate(config.taxRate);
+  }, [config.taxRate, market]);
+
   const fetchPros = () => {
-    fetch(`${API}/admin/users?role=professional&isVerified=false`, {
+    fetch(adminApiUrl("/admin/users?role=professional&isVerified=false", market), {
       credentials: "include",
     })
       .then((r) => r.json())
@@ -134,10 +145,13 @@ export default function AdminPage() {
   };
 
   useEffect(() => {
-    if (!userLoading) {
-      fetchPros();
-    }
-  }, [userLoading]);
+    fetchPros();
+    fetchInvoices();
+  }, [market]);
+
+  useEffect(() => {
+    fetchInvoices();
+  }, [filterStatus, market]);
 
   const verify = async (id: string, isVerified: boolean) => {
     await fetch(`${API}/admin/users/${id}/verify`, {
@@ -153,9 +167,9 @@ export default function AdminPage() {
   const fetchInvoices = async () => {
     setLoadingInvoices(true);
     try {
-      const url = filterStatus === "all" 
-        ? `${API}/invoices` 
-        : `${API}/invoices?status=${filterStatus}`;
+      const url = filterStatus === "all"
+        ? adminApiUrl("/invoices", market)
+        : adminApiUrl(`/invoices?status=${filterStatus}`, market);
       const res = await fetch(url, { credentials: "include" });
       if (res.ok) {
         const data = await res.json();
@@ -182,7 +196,7 @@ export default function AdminPage() {
 
   const fetchClients = async () => {
     try {
-      const res = await fetch(`${API}/admin/users?role=client`, { credentials: "include" });
+      const res = await fetch(adminApiUrl("/admin/users?role=client", market), { credentials: "include" });
       if (res.ok) {
         const data = await res.json();
         setClients(data);
@@ -204,9 +218,41 @@ export default function AdminPage() {
     setSelectedClient("");
     setIssueDate(new Date().toISOString().split("T")[0]);
     setDueDate("");
-    setTaxRate(16);
+    setTaxRate(config.taxRate);
+    setTaxExempt(false);
     setNotes("");
     setLineItems([{ description: "", productSku: "", quantity: 1, unitPrice: 0 }]);
+  };
+
+  const applyClientTax = (client: PendingUser | undefined) => {
+    if (!client) {
+      setTaxExempt(false);
+      setTaxRate(config.taxRate);
+      return;
+    }
+    if (client.taxExempt) {
+      setTaxExempt(true);
+      setTaxRate(0);
+      return;
+    }
+    setTaxExempt(false);
+    setTaxRate(
+      client.taxRate !== undefined && client.taxRate !== null
+        ? Number(client.taxRate)
+        : config.taxRate,
+    );
+  };
+
+  const persistClientTax = async (clientId: string) => {
+    await fetch(`${API}/admin/users/${clientId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        taxExempt,
+        taxRate: taxExempt ? 0 : taxRate,
+      }),
+    });
   };
 
   const addLineItem = () => {
@@ -228,7 +274,11 @@ export default function AdminPage() {
   const handleCreateInvoice = async () => {
     setSavingInvoice(true);
     try {
+      const effectiveTaxRate = taxExempt ? 0 : taxRate;
       if (invoiceMode === "proposal") {
+        const proposal = proposals.find((p) => p.id === selectedProposal);
+        const clientId = proposal?.clientId ?? proposal?.project?.clientId;
+        if (clientId) await persistClientTax(clientId);
         const res = await fetch(`${API}/invoices/from-proposal`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -237,7 +287,7 @@ export default function AdminPage() {
             proposalId: selectedProposal,
             issueDate,
             dueDate: dueDate || null,
-            taxRate,
+            taxRate: effectiveTaxRate,
             notes: notes || null,
           }),
         });
@@ -246,6 +296,7 @@ export default function AdminPage() {
           fetchInvoices();
         }
       } else {
+        if (selectedClient) await persistClientTax(selectedClient);
         const res = await fetch(`${API}/invoices`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -254,7 +305,7 @@ export default function AdminPage() {
             clientId: selectedClient,
             issueDate,
             dueDate: dueDate || null,
-            taxRate,
+            taxRate: effectiveTaxRate,
             lineItems: lineItems.map(item => ({
               description: item.description,
               productSku: item.productSku || null,
@@ -322,41 +373,52 @@ export default function AdminPage() {
     }
   };
 
-  // Update useEffect to fetch invoices when tab 2 is selected
-  useEffect(() => {
-    if (tab === 2 && !userLoading) {
-      fetchInvoices();
-    }
-  }, [tab, filterStatus, userLoading]);
-
-  if (!userLoading && user?.role !== "admin") {
-    return (
-      <Alert severity="error">
-        Acceso denegado. Solo administradores.
-      </Alert>
-    );
-  }
-
+  // Invoices refresh when filter changes (initial load in mount effect above)
   return (
-    <AppShell title="Administración" user={user}>
-      {userLoading ? (
-        <Box display="flex" justifyContent="center" mt={8}>
-          <CircularProgress />
-        </Box>
-      ) : (
-        <Stack spacing={2}>
-          <Tabs value={tab} onChange={(_, v) => setTab(v)}>
-            <Tab label={`Profesionales pendientes (${pendingPros.length})`} />
-            <Tab label="Catálogo de productos" />
-            <Tab label="Facturas" />
-            <Tab label="Invitaciones Admin" />
-          </Tabs>
+    <>
+      <Stack spacing={0}>
+      <Tabs
+        value={tab}
+        onChange={(_, v) => setTab(v)}
+        variant="scrollable"
+        scrollButtons="auto"
+        sx={{
+          position: "sticky",
+          top: 0,
+          zIndex: 9,
+          bgcolor: "background.default",
+          borderBottom: 1,
+          borderColor: "divider",
+          minHeight: 48,
+          mb: 0,
+          "& .MuiTab-root": { minHeight: 48, textTransform: "none", fontWeight: 500 },
+        }}
+      >
+        <Tab
+          id="admin-tab-0"
+          aria-controls="admin-tabpanel-0"
+          label={
+            <Stack direction="row" spacing={1} alignItems="center">
+              <span>Profesionales</span>
+              {pendingPros.length > 0 && (
+                <Chip label={pendingPros.length} size="small" color="warning" sx={{ height: 20, fontSize: 11 }} />
+              )}
+            </Stack>
+          }
+        />
+        <Tab id="admin-tab-1" aria-controls="admin-tabpanel-1" label="Catálogo" />
+        <Tab id="admin-tab-2" aria-controls="admin-tabpanel-2" label="Facturas" />
+        <Tab id="admin-tab-3" aria-controls="admin-tabpanel-3" label="Invitaciones" />
+      </Tabs>
 
-          {/* Tab 0: Pending professionals */}
-          {tab === 0 && (
-            <Stack spacing={2}>
-              {loadingPros ? <CircularProgress /> : null}
-              {!loadingPros && pendingPros.length === 0 && (
+      <AdminTabPanel value={tab} index={0}>
+        <Stack spacing={2}>
+          {loadingPros ? (
+            <Box display="flex" justifyContent="center" py={6}>
+              <CircularProgress size={28} />
+            </Box>
+          ) : null}
+          {!loadingPros && pendingPros.length === 0 && (
                 <Paper sx={{ p: 3, textAlign: "center", borderRadius: 3 }}>
                   <Typography color="text.secondary">
                     No hay profesionales pendientes de verificación.
@@ -397,7 +459,7 @@ export default function AdminPage() {
                         </Stack>
                       )}
                       <Typography variant="caption" color="text.secondary">
-                        📎 Documentos (RIF, certificaciones) — Próximamente
+                        📎 Documentos (RIF, certificaciones). Próximamente
                         (Google Cloud Storage)
                       </Typography>
                     </Box>
@@ -422,11 +484,10 @@ export default function AdminPage() {
                   </Stack>
                 </Paper>
               ))}
-            </Stack>
-          )}
+        </Stack>
+      </AdminTabPanel>
 
-          {/* Tab 1: Product catalog - redirect to dedicated page */}
-          {tab === 1 && (
+      <AdminTabPanel value={tab} index={1}>
             <Paper sx={{ p: 4, textAlign: "center", borderRadius: 3 }}>
               <Typography variant="h6" gutterBottom>
                 Gestión de Catálogo de Productos
@@ -443,11 +504,10 @@ export default function AdminPage() {
                 Ir al Catálogo de Productos
               </Button>
             </Paper>
-          )}
+      </AdminTabPanel>
 
-          {/* Tab 2: Invoices */}
-          {tab === 2 && (
-            <Stack spacing={2}>
+      <AdminTabPanel value={tab} index={2}>
+        <Stack spacing={2}>
               <Stack direction="row" spacing={2} alignItems="center">
                 <TextField
                   placeholder="Buscar por número o cliente..."
@@ -456,20 +516,19 @@ export default function AdminPage() {
                   size="small"
                   sx={{ flexGrow: 1 }}
                 />
-                <FormControl size="small" sx={{ minWidth: 200 }}>
-                  <InputLabel>Estado</InputLabel>
-                  <Select
-                    value={filterStatus}
-                    label="Estado"
-                    onChange={(e) => setFilterStatus(e.target.value)}
-                  >
-                    <MenuItem value="all">Todos</MenuItem>
-                    <MenuItem value="draft">Borrador</MenuItem>
-                    <MenuItem value="issued">Emitida</MenuItem>
-                    <MenuItem value="paid">Pagada</MenuItem>
-                    <MenuItem value="cancelled">Cancelada</MenuItem>
-                  </Select>
-                </FormControl>
+                <LabeledSelect
+                  label="Estado"
+                  size="small"
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(String(e.target.value))}
+                  formControlProps={{ size: "small", sx: { minWidth: 200 } }}
+                >
+                  <MenuItem value="all">Todos</MenuItem>
+                  <MenuItem value="draft">Borrador</MenuItem>
+                  <MenuItem value="issued">Emitida</MenuItem>
+                  <MenuItem value="paid">Pagada</MenuItem>
+                  <MenuItem value="cancelled">Cancelada</MenuItem>
+                </LabeledSelect>
                 <Button
                   variant="contained"
                   startIcon={<Add />}
@@ -480,8 +539,8 @@ export default function AdminPage() {
               </Stack>
 
               {loadingInvoices ? (
-                <Box display="flex" justifyContent="center" py={4}>
-                  <CircularProgress />
+                <Box display="flex" justifyContent="center" py={6}>
+                  <CircularProgress size={28} />
                 </Box>
               ) : (
                 <Paper sx={{ borderRadius: 3, overflow: "hidden" }}>
@@ -581,13 +640,13 @@ export default function AdminPage() {
                   )}
                 </Paper>
               )}
-            </Stack>
-          )}
-
-          {/* Tab 3: Admin Invitations */}
-          {tab === 3 && <AdminInvitationsTab />}
         </Stack>
-      )}
+      </AdminTabPanel>
+
+      <AdminTabPanel value={tab} index={3}>
+        <AdminInvitationsTab />
+      </AdminTabPanel>
+    </Stack>
 
       {/* Create Invoice Dialog */}
       <Dialog
@@ -610,36 +669,48 @@ export default function AdminPage() {
             </ToggleButtonGroup>
 
             {invoiceMode === "proposal" ? (
-              <FormControl fullWidth>
-                <InputLabel>Propuesta Firmada</InputLabel>
-                <Select
-                  value={selectedProposal}
-                  label="Propuesta Firmada"
-                  onChange={(e) => setSelectedProposal(e.target.value)}
-                >
-                  {proposals.map((prop) => (
-                    <MenuItem key={prop.id} value={prop.id}>
-                      {prop.project.title} - ${prop.laborCost.toFixed(2)}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <LabeledSelect
+                label="Propuesta Firmada"
+                value={selectedProposal}
+                emptyLabel="Seleccionar propuesta"
+                fullWidth
+                formControlProps={{ fullWidth: true }}
+                onChange={(e) => {
+                  const id = String(e.target.value);
+                  setSelectedProposal(id);
+                  const prop = proposals.find((p) => p.id === id);
+                  const clientId = prop?.clientId ?? prop?.project?.clientId;
+                  applyClientTax(clients.find((c) => c.id === clientId));
+                }}
+              >
+                {proposals.map((prop) => (
+                  <MenuItem key={prop.id} value={prop.id}>
+                    {prop.project?.title ?? prop.title ?? "Sin proyecto"} - $
+                    {Number(prop.laborCost).toFixed(2)}
+                  </MenuItem>
+                ))}
+              </LabeledSelect>
             ) : (
               <>
-                <FormControl fullWidth>
-                  <InputLabel>Cliente</InputLabel>
-                  <Select
-                    value={selectedClient}
-                    label="Cliente"
-                    onChange={(e) => setSelectedClient(e.target.value)}
-                  >
-                    {clients.map((client) => (
-                      <MenuItem key={client.id} value={client.id}>
-                        {client.name} ({client.email})
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                <LabeledSelect
+                  label="Cliente"
+                  value={selectedClient}
+                  emptyLabel="Seleccionar cliente"
+                  fullWidth
+                  formControlProps={{ fullWidth: true }}
+                  onChange={(e) => {
+                    const id = String(e.target.value);
+                    setSelectedClient(id);
+                    applyClientTax(clients.find((c) => c.id === id));
+                  }}
+                >
+                  {clients.map((client) => (
+                    <MenuItem key={client.id} value={client.id}>
+                      {client.name} ({client.email})
+                      {client.taxExempt ? " · Exento IVA" : ""}
+                    </MenuItem>
+                  ))}
+                </LabeledSelect>
 
                 <Typography variant="subtitle2" sx={{ mt: 2 }}>
                   Conceptos
@@ -708,11 +779,26 @@ export default function AdminPage() {
               InputLabelProps={{ shrink: true }}
               fullWidth
             />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={taxExempt}
+                  onChange={(e) => {
+                    setTaxExempt(e.target.checked);
+                    if (e.target.checked) setTaxRate(0);
+                    else setTaxRate(config.taxRate);
+                  }}
+                />
+              }
+              label="Exento de IVA"
+            />
             <TextField
               label="Tasa de IVA (%)"
               type="number"
               value={taxRate}
               onChange={(e) => setTaxRate(+e.target.value)}
+              disabled={taxExempt}
+              helperText="Se guarda en el cliente al crear la factura"
               fullWidth
             />
             <TextField
@@ -768,17 +854,21 @@ export default function AdminPage() {
                     <Typography variant="caption" color="text.secondary">
                       Estado
                     </Typography>
-                    <FormControl size="small" sx={{ minWidth: 150, display: "block", mt: 0.5 }}>
-                      <Select
-                        value={selectedInvoice.status}
-                        onChange={(e) => handleChangeStatus(selectedInvoice.id, e.target.value)}
-                      >
-                        <MenuItem value="draft">Borrador</MenuItem>
-                        <MenuItem value="issued">Emitida</MenuItem>
-                        <MenuItem value="paid">Pagada</MenuItem>
-                        <MenuItem value="cancelled">Cancelada</MenuItem>
-                      </Select>
-                    </FormControl>
+                    <LabeledSelect
+                      label="Estado"
+                      size="small"
+                      value={selectedInvoice.status}
+                      onChange={(e) => handleChangeStatus(selectedInvoice.id, String(e.target.value))}
+                      formControlProps={{
+                        size: "small",
+                        sx: { minWidth: 150, display: "block", mt: 0.5 },
+                      }}
+                    >
+                      <MenuItem value="draft">Borrador</MenuItem>
+                      <MenuItem value="issued">Emitida</MenuItem>
+                      <MenuItem value="paid">Pagada</MenuItem>
+                      <MenuItem value="cancelled">Cancelada</MenuItem>
+                    </LabeledSelect>
                   </Box>
                 </Stack>
 
@@ -898,6 +988,6 @@ export default function AdminPage() {
           </Button>
         </DialogActions>
       </Dialog>
-    </AppShell>
+    </>
   );
 }

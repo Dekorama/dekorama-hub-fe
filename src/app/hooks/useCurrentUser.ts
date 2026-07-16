@@ -10,8 +10,11 @@ export interface CurrentUser {
   name: string;
   role: "admin" | "professional" | "client";
   isVerified: boolean;
+  country: "VE" | "ES";
   accountType?: "individual" | "community" | "member" | null;
   parentAccountId?: string | null;
+  profileData?: Record<string, unknown> | null;
+  createdAt?: string;
 }
 
 export function useCurrentUser(redirectOnFail = true) {

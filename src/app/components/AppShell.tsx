@@ -2,14 +2,18 @@
 
 import {
   AppBar,
+  Avatar,
   Badge,
   Box,
+  Divider,
   Drawer,
   IconButton,
   List,
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  Menu,
+  MenuItem,
   Toolbar,
   Tooltip,
   Typography,
@@ -25,12 +29,18 @@ import FolderOpenIcon from "@mui/icons-material/FolderOpen";
 import GroupsIcon from "@mui/icons-material/Groups";
 import LogoutIcon from "@mui/icons-material/Logout";
 import MenuIcon from "@mui/icons-material/Menu";
+import RequestQuoteIcon from "@mui/icons-material/RequestQuote";
+import ReceiptIcon from "@mui/icons-material/Receipt";
+import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
+import PersonIcon from "@mui/icons-material/Person";
 import Image from "next/image";
 import Link from "next/link";
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useState, MouseEvent } from "react";
 import { usePathname } from "next/navigation";
 import { CurrentUser, API } from "../hooks/useCurrentUser";
+import { CART_UPDATED_EVENT } from "../utils/cartEvents";
+import { getInitials, getRoleLabel } from "../utils/userLabels";
 
 const SIDEBAR_OPEN = 240;
 const SIDEBAR_CLOSED = 64;
@@ -46,6 +56,10 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Panel", icon: <DashboardIcon /> },
   { href: "/proyectos", label: "Proyectos", icon: <FolderOpenIcon /> },
+  { href: "/carrito", label: "Carrito", icon: <ShoppingCartIcon />, roles: ["client", "professional"] },
+  { href: "/solicitudes", label: "Solicitudes", icon: <RequestQuoteIcon />, roles: ["client", "professional"] },
+  { href: "/pedidos", label: "Pedidos", icon: <LocalShippingIcon />, roles: ["client", "professional"] },
+  { href: "/facturas", label: "Facturas", icon: <ReceiptIcon />, roles: ["client", "professional"] },
   { href: "/propuestas", label: "Propuestas", icon: <DescriptionIcon />, roles: ["professional"] },
   { href: "/portafolio/editar", label: "Portafolio", icon: <FolderOpenIcon />, roles: ["professional"] },
   { href: "/admin", label: "Administración", icon: <AdminPanelSettingsIcon />, roles: ["admin"] },
@@ -62,60 +76,78 @@ export function AppShell({ title, children, user }: AppShellProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
-  const [open, setOpen] = useState<boolean>(true);
-  const [mobileOpen, setMobileOpen] = useState<boolean>(false);
-  const [mounted, setMounted] = useState<boolean>(false);
-  const [cartCount, setCartCount] = useState<number>(0);
-
-  useEffect(() => {
+  const [open, setOpen] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored !== null) {
-      setOpen(stored === "true");
+    return stored === null ? true : stored === "true";
+  });
+  const [mobileOpen, setMobileOpen] = useState<boolean>(false);
+  const [cartCount, setCartCount] = useState<number>(0);
+  const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
+  const showCart = user?.role === "client" || user?.role === "professional";
+  const userMenuOpen = Boolean(userMenuAnchor);
+
+  const refreshCartCount = () => {
+    if (!user || !showCart) {
+      setCartCount(0);
+      return;
     }
-    setMounted(true);
-  }, []);
+    fetch(`${API}/cart`, { credentials: "include" })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((cart: unknown[]) => setCartCount(cart.length))
+      .catch(() => setCartCount(0));
+  };
 
   useEffect(() => {
-    if (user) {
-      // Fetch cart count
-      fetch(`${API}/cart`, { credentials: "include" })
-        .then((res) => res.ok ? res.json() : [])
-        .then((cart) => setCartCount(cart.length))
-        .catch(() => setCartCount(0));
-    }
-  }, [user]);
+    refreshCartCount();
+  }, [user, pathname, showCart]);
 
   useEffect(() => {
-    if (mounted) {
-      localStorage.setItem(STORAGE_KEY, String(open));
-    }
-  }, [open, mounted]);
+    if (!showCart) return;
+    const handleCartUpdated = () => refreshCartCount();
+    window.addEventListener(CART_UPDATED_EVENT, handleCartUpdated);
+    return () => window.removeEventListener(CART_UPDATED_EVENT, handleCartUpdated);
+  }, [user, showCart]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, String(open));
+  }, [open]);
 
   const sidebarWidth = open ? SIDEBAR_OPEN : SIDEBAR_CLOSED;
 
   const handleLogout = async () => {
+    setUserMenuAnchor(null);
     await fetch(`${API}/auth/logout`, { method: "POST", credentials: "include" });
     window.location.href = "/";
   };
 
+  const handleUserMenuOpen = (event: MouseEvent<HTMLElement>) => {
+    setUserMenuAnchor(event.currentTarget);
+  };
+
+  const handleUserMenuClose = () => {
+    setUserMenuAnchor(null);
+  };
+
+  const handleMenuNavigate = (href: string) => {
+    handleUserMenuClose();
+    window.location.href = href;
+  };
+
   const visibleItems = NAV_ITEMS.filter(
-    (item) => !item.roles || (user?.role && item.roles.includes(user.role))
+    (item) =>
+      (user?.role !== "admin" || item.href !== "/proyectos") &&
+      (!item.roles || (user?.role && item.roles.includes(user.role))),
   );
   
   // Add Comunidad link dynamically for community organizers
   if (user?.accountType === "community") {
-    const comunidadItem = {
-      href: "/dashboard/comunidad/invitaciones",
-      label: "Comunidad",
-      icon: <GroupsIcon />,
-    };
-    // Insert after Proyectos, before Propuestas/Admin
-    const insertIndex = visibleItems.findIndex(item => item.href === "/propuestas" || item.href === "/admin");
-    if (insertIndex !== -1) {
-      visibleItems.splice(insertIndex, 0, comunidadItem);
-    } else {
-      visibleItems.push(comunidadItem);
-    }
+    const proyectosIndex = visibleItems.findIndex((item) => item.href === "/proyectos");
+    const insertAt = proyectosIndex !== -1 ? proyectosIndex + 1 : visibleItems.length;
+    visibleItems.splice(insertAt, 0,
+      { href: "/dashboard/comunidad/invitaciones", label: "Invitaciones", icon: <GroupsIcon /> },
+      { href: "/dashboard/comunidad/miembros", label: "Vecinos", icon: <GroupsIcon /> },
+    );
   }
 
   const drawerContent = (
@@ -144,7 +176,7 @@ export function AppShell({ title, children, user }: AppShellProps) {
       {/* Nav items */}
       <List sx={{ flex: 1, px: 1, pt: 1 }}>
         {visibleItems.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(item.href + "/");
+          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
           const isOpen = isMobile || open;
           const btn = (
             <ListItemButton
@@ -289,24 +321,90 @@ export function AppShell({ title, children, user }: AppShellProps) {
             </Box>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               {user && (
-                <Typography variant="body2" color="text.secondary" noWrap sx={{ maxWidth: { xs: 100, sm: 200 } }}>
-                  {user.name ?? user.email}
-                </Typography>
+                <>
+                  <Tooltip title="Cuenta">
+                    <IconButton
+                      onClick={handleUserMenuOpen}
+                      size="small"
+                      sx={{ p: 0.5 }}
+                      aria-controls={userMenuOpen ? "user-menu" : undefined}
+                      aria-haspopup="true"
+                      aria-expanded={userMenuOpen ? "true" : undefined}
+                    >
+                      <Avatar
+                        sx={{
+                          width: 32,
+                          height: 32,
+                          bgcolor: "primary.main",
+                          fontSize: 14,
+                          fontWeight: 600,
+                        }}
+                      >
+                        {getInitials(user.name ?? user.email)}
+                      </Avatar>
+                    </IconButton>
+                  </Tooltip>
+                  <Menu
+                    id="user-menu"
+                    anchorEl={userMenuAnchor}
+                    open={userMenuOpen}
+                    onClose={handleUserMenuClose}
+                    onClick={handleUserMenuClose}
+                    transformOrigin={{ horizontal: "right", vertical: "top" }}
+                    anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
+                    slotProps={{
+                      paper: {
+                        elevation: 3,
+                        sx: { minWidth: 220, mt: 1 },
+                      },
+                    }}
+                  >
+                    <Box sx={{ px: 2, py: 1.5 }}>
+                      <Typography variant="subtitle2" fontWeight={700} noWrap>
+                        {user.name ?? "Usuario"}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" noWrap display="block">
+                        {user.email}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {getRoleLabel(user.role)}
+                      </Typography>
+                    </Box>
+                    <Divider />
+                    <MenuItem onClick={() => handleMenuNavigate("/perfil")}>
+                      <ListItemIcon>
+                        <PersonIcon fontSize="small" />
+                      </ListItemIcon>
+                      Mi perfil
+                    </MenuItem>
+                    {showCart && (
+                      <MenuItem onClick={() => handleMenuNavigate("/carrito")}>
+                        <ListItemIcon>
+                          <Badge badgeContent={cartCount} color="primary">
+                            <ShoppingCartIcon fontSize="small" />
+                          </Badge>
+                        </ListItemIcon>
+                        Carrito
+                      </MenuItem>
+                    )}
+                    {user.role === "admin" && (
+                      <MenuItem onClick={() => handleMenuNavigate("/admin")}>
+                        <ListItemIcon>
+                          <AdminPanelSettingsIcon fontSize="small" />
+                        </ListItemIcon>
+                        Administración
+                      </MenuItem>
+                    )}
+                    <Divider />
+                    <MenuItem onClick={handleLogout}>
+                      <ListItemIcon>
+                        <LogoutIcon fontSize="small" />
+                      </ListItemIcon>
+                      Cerrar sesión
+                    </MenuItem>
+                  </Menu>
+                </>
               )}
-              {user && (
-                <Tooltip title="Carrito de compras">
-                  <IconButton component={Link} href="/carrito" size="small" sx={{ color: "#555" }}>
-                    <Badge badgeContent={cartCount} color="primary">
-                      <ShoppingCartIcon fontSize="small" />
-                    </Badge>
-                  </IconButton>
-                </Tooltip>
-              )}
-              <Tooltip title="Cerrar sesión">
-                <IconButton onClick={handleLogout} size="small" sx={{ color: "#555" }}>
-                  <LogoutIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
             </Box>
           </Toolbar>
         </AppBar>

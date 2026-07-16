@@ -13,20 +13,23 @@ import AssignmentIcon from "@mui/icons-material/Assignment";
 import EngineeringIcon from "@mui/icons-material/Engineering";
 import HomeRepairServiceIcon from "@mui/icons-material/HomeRepairService";
 import Link from "next/link";
-import { AppShell } from "../components/AppShell";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { formatMarketBadge } from "../utils/market";
+import { AdminDashboard } from "../admin/components/AdminDashboard";
 
 export default function DashboardPage() {
   const { user, loading } = useCurrentUser();
+  const isAdmin = user?.role === "admin";
 
   return (
-    <AppShell title="Panel Dekorama Hub" user={user}>
+    <>
       {loading ? (
         <Box display="flex" justifyContent="center" mt={8}>
           <CircularProgress />
         </Box>
       ) : (
         <Stack spacing={3}>
+          {!isAdmin && (
           <Paper
             sx={{
               p: 3,
@@ -38,7 +41,7 @@ export default function DashboardPage() {
           >
             <Stack direction={{ xs: "column", md: "row" }} spacing={3} alignItems="flex-start" justifyContent="space-between">
               <Box>
-                <Stack direction="row" spacing={1} alignItems="center" mb={1}>
+                <Stack direction="row" spacing={1} alignItems="center" mb={1} flexWrap="wrap">
                   <Typography variant="h5" fontWeight={800}>
                     Hola {user?.name ?? user?.email},
                   </Typography>
@@ -47,13 +50,18 @@ export default function DashboardPage() {
                     size="small"
                     sx={{ bgcolor: "rgba(255,255,255,0.25)", color: "#fff" }}
                   />
+                  {user?.country && (
+                    <Chip
+                      label={formatMarketBadge(user.country)}
+                      size="small"
+                      sx={{ bgcolor: "rgba(255,255,255,0.15)", color: "#fff" }}
+                    />
+                  )}
                 </Stack>
                 <Typography variant="body1" sx={{ opacity: 0.9 }}>
                   {user?.role === "client"
-                    ? "Crea tus proyectos de reconstrucción y recibe propuestas de profesionales verificados."
-                    : user?.role === "professional"
-                    ? "Explora proyectos abiertos y envía tus propuestas con lista de materiales."
-                    : "Gestiona el catálogo, verifica profesionales y modera la plataforma."}
+                    ? "Crea tus proyectos, compra materiales Dekorama y recibe propuestas de profesionales verificados."
+                    : "Explora proyectos abiertos y envía propuestas con materiales Dekorama o por cuenta propia."}
                 </Typography>
                 <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} mt={3}>
                   <Button
@@ -64,36 +72,29 @@ export default function DashboardPage() {
                   >
                     {user?.role === "client" ? "Mis proyectos" : "Ver proyectos"}
                   </Button>
-                  {user?.role === "admin" && (
-                    <Button
-                      component={Link}
-                      href="/admin"
-                      variant="outlined"
-                      sx={{ color: "#fff", borderColor: "rgba(255,255,255,0.5)" }}
-                    >
-                      Administración
-                    </Button>
-                  )}
                 </Stack>
               </Box>
             </Stack>
           </Paper>
+          )}
 
-          <Stack direction={{ xs: "column", md: "row" }} spacing={3}>
-            <Paper sx={{ p: 3, borderRadius: 3, flex: 1 }}>
-              <Stack direction="row" spacing={2} alignItems="center" mb={2}>
-                <AssignmentIcon color="primary" />
-                <Typography variant="h6" fontWeight={700}>Proyectos</Typography>
-              </Stack>
-              <Typography variant="body2" color="text.secondary" mb={2}>
-                {user?.role === "client"
-                  ? "Gestiona tus proyectos de reconstrucción, controla el estado y revisa cotizaciones."
-                  : "Explora el feed público de proyectos que necesitan profesionales."}
-              </Typography>
-              <Button component={Link} href="/proyectos" variant="outlined" size="small">Ver proyectos</Button>
-            </Paper>
+          {isAdmin && user && <AdminDashboard user={user} />}
 
-            {user?.role !== "admin" && (
+          {!isAdmin && (
+            <Stack direction={{ xs: "column", md: "row" }} spacing={3}>
+              <Paper sx={{ p: 3, borderRadius: 3, flex: 1 }}>
+                <Stack direction="row" spacing={2} alignItems="center" mb={2}>
+                  <AssignmentIcon color="primary" />
+                  <Typography variant="h6" fontWeight={700}>Proyectos</Typography>
+                </Stack>
+                <Typography variant="body2" color="text.secondary" mb={2}>
+                  {user?.role === "client"
+                    ? "Gestiona tus proyectos, controla el estado y revisa cotizaciones antes de comprar materiales."
+                    : "Explora el feed público de proyectos y licita en tu mercado."}
+                </Typography>
+                <Button component={Link} href="/proyectos" variant="outlined" size="small">Ver proyectos</Button>
+              </Paper>
+
               <Paper sx={{ p: 3, borderRadius: 3, flex: 1 }}>
                 <Stack direction="row" spacing={2} alignItems="center" mb={2}>
                   <EngineeringIcon color="secondary" />
@@ -108,26 +109,39 @@ export default function DashboardPage() {
                   Ver propuestas
                 </Button>
               </Paper>
-            )}
+            </Stack>
+          )}
 
-            {user?.role === "admin" && (
+          {isAdmin && (
+            <Stack direction={{ xs: "column", md: "row" }} spacing={3}>
               <Paper sx={{ p: 3, borderRadius: 3, flex: 1 }}>
                 <Stack direction="row" spacing={2} alignItems="center" mb={2}>
                   <HomeRepairServiceIcon color="secondary" />
                   <Typography variant="h6" fontWeight={700}>Catálogo de productos</Typography>
                 </Stack>
                 <Typography variant="body2" color="text.secondary" mb={2}>
-                  Administra los productos del catálogo Dekorama disponibles para las propuestas.
+                  Administra productos, familias y precios por mercado.
                 </Typography>
-                <Button component={Link} href="/admin" variant="outlined" size="small" color="secondary">
-                  Ir a administración
+                <Button component={Link} href="/admin/productos" variant="outlined" size="small" color="secondary">
+                  Ir al catálogo
                 </Button>
               </Paper>
-            )}
-          </Stack>
-
+              <Paper sx={{ p: 3, borderRadius: 3, flex: 1 }}>
+                <Stack direction="row" spacing={2} alignItems="center" mb={2}>
+                  <AssignmentIcon color="primary" />
+                  <Typography variant="h6" fontWeight={700}>Proyectos</Typography>
+                </Stack>
+                <Typography variant="body2" color="text.secondary" mb={2}>
+                  Filtra y gestiona proyectos por país del cliente.
+                </Typography>
+                <Button component={Link} href="/admin/proyectos" variant="outlined" size="small">
+                  Ver proyectos
+                </Button>
+              </Paper>
+            </Stack>
+          )}
         </Stack>
       )}
-    </AppShell>
+    </>
   );
 }

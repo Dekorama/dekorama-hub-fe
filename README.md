@@ -1,6 +1,6 @@
 ## RanchOps MVP
 
-Frontend (Next.js + Material UI) y backend (NestJS + Postgres) para el MVP descrito en `RanchOps — Technical MVP Overview`.
+Frontend (Next.js + Material UI) y backend (NestJS + Postgres) para el MVP descrito en `RanchOps - Technical MVP Overview`.
 
 ### Frontend (`ranchops-fe`)
 

@@ -10,7 +10,6 @@ import {
 } from "@mui/material";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { AppShell } from "../components/AppShell";
 import { useCurrentUser, API } from "../hooks/useCurrentUser";
 
 interface ProposalWithProject {
@@ -55,7 +54,7 @@ export default function PropuestasPage() {
   }, [userLoading]);
 
   return (
-    <AppShell title="Propuestas" user={user}>
+    <>
       {userLoading || loading ? (
         <Box display="flex" justifyContent="center" mt={8}>
           <CircularProgress />
@@ -114,6 +113,6 @@ export default function PropuestasPage() {
           ))}
         </Stack>
       )}
-    </AppShell>
+    </>
   );
 }

@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { RanchOpsThemeProvider } from "./RanchOpsThemeProvider";
 import { AppRouterCacheProvider } from "@mui/material-nextjs/v16-appRouter";
+import { AppShellLayout } from "./components/AppShellLayout";
 
 export const metadata: Metadata = {
   title: "Dekorama Hub",
-  description: "Plataforma colaborativa de reconstrucción — conecta clientes con profesionales verificados",
+  description: "Publica proyectos, compra materiales Dekorama y conecta con profesionales verificados en Venezuela y España",
   viewport: {
     width: "device-width",
     initialScale: 1,
@@ -23,9 +24,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es">
-      <body>
+      <body suppressHydrationWarning>
         <AppRouterCacheProvider>
-          <RanchOpsThemeProvider>{children}</RanchOpsThemeProvider>
+          <RanchOpsThemeProvider>
+            <AppShellLayout>{children}</AppShellLayout>
+          </RanchOpsThemeProvider>
         </AppRouterCacheProvider>
       </body>
     </html>

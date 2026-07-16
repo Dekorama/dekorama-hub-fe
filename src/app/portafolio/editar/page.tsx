@@ -19,13 +19,15 @@ import {
   Chip,
 } from "@mui/material";
 import { AddPhotoAlternate } from "@mui/icons-material";
-import { AppShell } from "../../components/AppShell";
 import { useCurrentUser, API } from "../../hooks/useCurrentUser";
+import { usePageTitle } from "../../components/PageTitleContext";
 import { MOCK_PORTFOLIO_IMAGES, MOCK_IMAGE_LABELS } from "../../utils/mockImages";
 
 export default function PortfolioEditorPage() {
   const { user, loading } = useCurrentUser();
   const router = useRouter();
+
+  usePageTitle("Crear Proyecto de Portafolio");
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -39,26 +41,22 @@ export default function PortfolioEditorPage() {
 
   if (user.role !== "professional") {
     return (
-      <AppShell title="Portafolio" user={user}>
-        <Container maxWidth="md" sx={{ mt: 4 }}>
-          <Alert severity="error">
-            Solo los profesionales pueden crear portafolios
-          </Alert>
-        </Container>
-      </AppShell>
+      <Container maxWidth="md" sx={{ mt: 4 }}>
+        <Alert severity="error">
+          Solo los profesionales pueden crear portafolios
+        </Alert>
+      </Container>
     );
   }
 
   if (!user.isVerified) {
     return (
-      <AppShell title="Portafolio" user={user}>
-        <Container maxWidth="md" sx={{ mt: 4 }}>
-          <Alert severity="warning">
-            Debes estar verificado para crear portafolios. Por favor, sube tus
-            documentos profesionales en el panel de administración.
-          </Alert>
-        </Container>
-      </AppShell>
+      <Container maxWidth="md" sx={{ mt: 4 }}>
+        <Alert severity="warning">
+          Debes estar verificado para crear portafolios. Por favor, sube tus
+          documentos profesionales en el panel de administración.
+        </Alert>
+      </Container>
     );
   }
 
@@ -114,8 +112,7 @@ export default function PortfolioEditorPage() {
   };
 
   return (
-    <AppShell title="Crear Proyecto de Portafolio" user={user}>
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 8 }}>
+    <Container maxWidth="lg" sx={{ mt: 4, mb: 8 }}>
         <Paper elevation={3} sx={{ p: 4 }}>
           <Typography variant="h5" gutterBottom>
             Nuevo Proyecto de Portafolio
@@ -242,6 +239,5 @@ export default function PortfolioEditorPage() {
           </form>
         </Paper>
       </Container>
-    </AppShell>
   );
 }
