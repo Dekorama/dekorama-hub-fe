@@ -33,21 +33,21 @@ npm run lint
 
 | Variable | Default | Notes |
 |----------|---------|--------|
-| `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:3001` | Backend origin |
+| `API_PROXY_TARGET` | `http://localhost:3001` | Nest URL for `/api/[...path]` proxy (**server-only**) |
 | `NEXT_PUBLIC_SUPPORT_EMAIL` | _(optional)_ | Support mailto / contact |
 
 `.env.example`:
 
 ```bash
-NEXT_PUBLIC_API_BASE_URL=http://localhost:3001
+API_PROXY_TARGET=http://localhost:3001
 NEXT_PUBLIC_SUPPORT_EMAIL=soporte@dekorama.com
 ```
 
-API helper: `useCurrentUser` and most pages use `process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001"`.
+Browser always calls same-origin `/api/*` (never the Render URL directly). Required for iOS Chrome/Safari cookies.
 
 ## Auth & roles
 
-Session cookie `dekorama_session` is set by the backend. Frontend never stores the password; it calls `/auth/me` with cookies.
+Session cookie `dekorama_session` is set via the `/api` proxy (first-party on the FE host). Frontend never stores the password; it calls `/api/auth/me` with cookies.
 
 | Role | Typical routes |
 |------|----------------|
@@ -121,6 +121,6 @@ public/logo/
 ## Local full stack
 
 1. Start Postgres + API in `dekorama-be` (`docker compose up -d`, set `ADMIN_*` in `.env`, `npm run seed`, `npm run start:dev`).
-2. FE `.env`: `NEXT_PUBLIC_API_BASE_URL=/api` and `API_PROXY_TARGET=http://localhost:3001` (or direct BE URL for local-only).
+2. FE `.env`: `API_PROXY_TARGET=http://localhost:3001`.
 3. `npm run dev` here.
 4. Login with the admin credentials you set in `ADMIN_EMAIL` / `ADMIN_PASSWORD`.

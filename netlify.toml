@@ -3,9 +3,9 @@
 
 [build.environment]
   NODE_VERSION = "22"
-  # Set in Netlify UI too:
-  # NEXT_PUBLIC_API_BASE_URL=/api
+  # Netlify UI (required):
   # API_PROXY_TARGET=https://dekorama-hub-be.onrender.com
+  # Do NOT set NEXT_PUBLIC_API_BASE_URL to onrender — breaks iOS cookies.
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"

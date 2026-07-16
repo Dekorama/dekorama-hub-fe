@@ -1,19 +1,7 @@
 import type { NextConfig } from "next";
 
-const proxyTarget = (
-  process.env.API_PROXY_TARGET ||
-  "http://localhost:3001"
-).replace(/\/$/, "");
-
-const nextConfig: NextConfig = {
-  async rewrites() {
-    return [
-      {
-        source: "/api/:path*",
-        destination: `${proxyTarget}/:path*`,
-      },
-    ];
-  },
-};
+// API proxy lives in src/app/api/[...path]/route.ts (forwards Set-Cookie for mobile).
+// Do not use rewrites for /api — they often drop Set-Cookie on Netlify.
+const nextConfig: NextConfig = {};
 
 export default nextConfig;

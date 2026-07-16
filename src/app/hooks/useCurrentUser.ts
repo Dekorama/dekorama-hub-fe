@@ -3,11 +3,10 @@
 import { useEffect, useState } from "react";
 
 /**
- * Same-origin `/api` (Next rewrite → Nest) so session cookies are first-party.
- * Required for mobile Safari (blocks third-party cookies across netlify ↔ onrender).
- * Override with NEXT_PUBLIC_API_BASE_URL for direct BE access if needed.
+ * Always same-origin `/api` → Next route proxy → Nest.
+ * Absolute URLs (onrender) break session cookies on iOS Chrome/Safari.
  */
-const API = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api").replace(/\/$/, "");
+export const API = "/api";
 
 export interface CurrentUser {
   id: string;
@@ -27,22 +26,39 @@ export function useCurrentUser(redirectOnFail = true) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API}/auth/me`, { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : null))
+    let cancelled = false;
+
+    fetch(`${API}/auth/me`, { credentials: "include", cache: "no-store" })
+      .then(async (r) => {
+        if (!r.ok) return null;
+        const text = await r.text();
+        if (!text) return null;
+        try {
+          return JSON.parse(text) as CurrentUser | null;
+        } catch {
+          return null;
+        }
+      })
       .then((data) => {
+        if (cancelled) return;
         if (!data && redirectOnFail) {
-          window.location.href = "/login";
+          window.location.replace("/login");
           return;
         }
         setUser(data);
       })
       .catch(() => {
-        if (redirectOnFail) window.location.href = "/login";
+        if (cancelled) return;
+        if (redirectOnFail) window.location.replace("/login");
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [redirectOnFail]);
 
   return { user, loading };
 }
-
-export { API };
