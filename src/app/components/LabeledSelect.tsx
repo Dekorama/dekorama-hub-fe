@@ -9,7 +9,7 @@ import {
 } from "@mui/material";
 import { useId } from "react";
 
-export interface LabeledSelectProps extends Omit<SelectProps, "label"> {
+export interface LabeledSelectProps extends Omit<SelectProps<string>, "label"> {
   label: string;
   formControlProps?: FormControlProps;
   /** Shown when value is empty; keeps label above border (no overlap) */

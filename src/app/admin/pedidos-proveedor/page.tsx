@@ -625,7 +625,7 @@ export default function PedidosProveedorPage() {
               fullWidth
               formControlProps={{ fullWidth: true }}
               onChange={(e) =>
-                setForm({ clientOrderId: e.target.value, supplierId: "" })
+                setForm({ clientOrderId: String(e.target.value), supplierId: "" })
               }
             >
               {clientOrders.map((o) => (
@@ -640,7 +640,7 @@ export default function PedidosProveedorPage() {
               emptyLabel="Seleccionar proveedor"
               fullWidth
               formControlProps={{ fullWidth: true }}
-              onChange={(e) => setForm({ ...form, supplierId: e.target.value })}
+              onChange={(e) => setForm({ ...form, supplierId: String(e.target.value) })}
             >
               {suppliers.map((s) => (
                 <MenuItem key={s.id} value={s.id}>
