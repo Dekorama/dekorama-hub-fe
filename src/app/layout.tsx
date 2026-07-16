@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { RanchOpsThemeProvider } from "./RanchOpsThemeProvider";
+import { RanchOpsThemeProvider } from "@/core/providers/RanchOpsThemeProvider";
 import { AppRouterCacheProvider } from "@mui/material-nextjs/v16-appRouter";
-import { AppShellLayout } from "./components/AppShellLayout";
+import { AppShellLayout } from "@/shared/components/AppShellLayout";
 
 export const metadata: Metadata = {
   title: "Dekorama Hub",

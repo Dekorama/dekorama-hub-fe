@@ -1,0 +1,31 @@
+---
+description: Dekorama FE feature-based architecture — thin app routes, fat features
+globs: dekorama-fe/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Dekorama FE architecture
+
+Before any FE change, follow `dekorama-fe/AGENTS.md`.
+
+## Rules
+
+1. **`app/` = routes only.** Thin `page.tsx` that imports from `@/features/...`.
+2. **New UI goes in `features/<domain>/components/`**, not under `app/`.
+3. **Shared cross-domain** → `shared/components` or `shared/ui`.
+4. **Providers/theme** → `core/`.
+5. **Imports:** `@/features/...`, `@/shared/...`, `@/core/...`. Never invent `app/components`.
+6. **Tables/tabs/toolbars:** use `ResponsiveTable`, `ScrollableTabs`, `PageToolbar` from `@/shared/ui`.
+7. **TypeScript:** no `any`. Prefer named exports for feature pages (`CartPage`, etc.).
+8. **Do not change URL paths** when moving code between folders.
+
+## Thin page template
+
+```tsx
+import { XPage } from "@/features/<name>/components/XPage";
+export default function Page() {
+  return <XPage />;
+}
+```
+
+For dynamic routes, pass params as props into the feature page.
