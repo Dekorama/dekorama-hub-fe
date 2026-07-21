@@ -79,6 +79,13 @@ interface Subfamily {
   supplierId?: string | null;
 }
 
+interface SupplierOption {
+  id: string;
+  name: string;
+  prefix: string | null;
+  familyCodes?: string[];
+}
+
 function normalizeProduct(raw: Product): Product {
   return {
     ...raw,
@@ -130,28 +137,87 @@ export function AdminProductsPage() {
   const [formSupplierId, setFormSupplierId] = useState("");
   const [formSupplierFactoryCode, setFormSupplierFactoryCode] = useState("");
   const [loadingFactoryCode, setLoadingFactoryCode] = useState(false);
+  const [familySuppliers, setFamilySuppliers] = useState<SupplierOption[]>([]);
+  const [suppliersLinkedToFamily, setSuppliersLinkedToFamily] = useState(true);
+  const [loadingFamilySuppliers, setLoadingFamilySuppliers] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loadingSubfamilies, setLoadingSubfamilies] = useState(false);
 
-  // Wizard
+  // Wizard: Familia → Proveedor → Artículo
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState(0);
-  const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([]);
-  const [wizSupplier, setWizSupplier] = useState({ name: "", email: "" });
+  const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
+  const [wizSupplier, setWizSupplier] = useState({
+    name: "",
+    email: "",
+    prefix: "",
+  });
   const [wizSupplierId, setWizSupplierId] = useState("");
   const [wizFactoryCode, setWizFactoryCode] = useState("");
   const [wizFamily, setWizFamily] = useState({ code: "", name: "" });
   const [createdSku, setCreatedSku] = useState("");
 
   useEffect(() => {
-    fetchData();
+    void fetchData();
   }, [market]);
 
   useEffect(() => {
     if (filterFamily) {
-      fetchSubfamilies(filterFamily);
+      void fetchSubfamilies(filterFamily);
     }
   }, [filterFamily]);
+
+  useEffect(() => {
+    if (formFamily) {
+      void fetchSuppliersForFamily(formFamily);
+    } else {
+      setFamilySuppliers([]);
+      setSuppliersLinkedToFamily(true);
+    }
+  }, [formFamily, market]);
+
+  useEffect(() => {
+    if (!formSupplierId) return;
+    setFamilySuppliers((prev) => {
+      if (prev.some((s) => s.id === formSupplierId)) return prev;
+      const fromAll = suppliers.find((s) => s.id === formSupplierId);
+      return fromAll ? [...prev, fromAll] : prev;
+    });
+  }, [formSupplierId, suppliers]);
+
+  async function fetchSuppliersForFamily(familyCode: string) {
+    setLoadingFamilySuppliers(true);
+    try {
+      const [linkedRes, allRes] = await Promise.all([
+        fetch(
+          adminApiUrl(`/suppliers?familyCode=${encodeURIComponent(familyCode)}`, market),
+          { credentials: "include" },
+        ),
+        fetch(adminApiUrl("/suppliers", market), { credentials: "include" }),
+      ]);
+
+      const all = allRes.ok ? ((await allRes.json()) as SupplierOption[]) : [];
+      if (allRes.ok) setSuppliers(all);
+
+      if (linkedRes.ok) {
+        const linked = (await linkedRes.json()) as SupplierOption[];
+        if (linked.length > 0) {
+          setFamilySuppliers(linked);
+          setSuppliersLinkedToFamily(true);
+        } else {
+          setFamilySuppliers(all);
+          setSuppliersLinkedToFamily(false);
+        }
+        return;
+      }
+      setFamilySuppliers(all);
+      setSuppliersLinkedToFamily(false);
+    } catch {
+      setFamilySuppliers([]);
+    } finally {
+      setLoadingFamilySuppliers(false);
+    }
+  }
 
   async function fetchData() {
     setLoading(true);
@@ -352,49 +418,77 @@ export function AdminProductsPage() {
     setSaving(true);
     try {
       if (wizardStep === 0) {
+        // Familia (existing or create)
+        if (wizFamily.code) {
+          setFormFamily(wizFamily.code);
+          setWizardStep(1);
+          return;
+        }
+        if (!wizFamily.name.trim()) {
+          showError("Nombre de familia obligatorio");
+          return;
+        }
+        const famRes = await fetch(`${API}/products/families`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ name: wizFamily.name.trim() }),
+        });
+        if (!famRes.ok) {
+          showError(await readApiError(famRes, "Error al crear familia"));
+          return;
+        }
+        const fam = (await famRes.json()) as Family;
+        setWizFamily({ code: fam.code, name: fam.name });
+        setFormFamily(fam.code);
+        setWizardStep(1);
+      } else if (wizardStep === 1) {
+        const prefix = wizSupplier.prefix.trim().toUpperCase();
+        if (!wizSupplier.name.trim() || !wizSupplier.email.trim() || prefix.length !== 3) {
+          showError("Proveedor: nombre, email y prefijo (3) obligatorios");
+          return;
+        }
+        const familyCode = wizFamily.code || formFamily;
+        if (!familyCode) {
+          showError("Familia requerida");
+          return;
+        }
         const res = await fetch(`${API}/suppliers`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ ...wizSupplier, market }),
+          body: JSON.stringify({
+            name: wizSupplier.name.trim(),
+            email: wizSupplier.email.trim(),
+            prefix,
+            familyCodes: [familyCode],
+            market,
+          }),
         });
         if (!res.ok) {
           showError(await readApiError(res, "Error al crear proveedor"));
           return;
         }
-        const data = await res.json();
+        const data = (await res.json()) as SupplierOption;
         setWizSupplierId(data.id);
-        setWizardStep(1);
-      } else if (wizardStep === 1) {
-        const famRes = await fetch(`${API}/products/families`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify(wizFamily),
-        });
-        // Familia puede ya existir; si falla por duplicado, seguimos con el código indicado
-        if (!famRes.ok && famRes.status !== 400) {
-          showError(await readApiError(famRes, "Error al crear familia"));
-          return;
-        }
-        setFormFamily(wizFamily.code);
         setWizardStep(2);
       } else if (wizardStep === 2) {
         if (!wizFactoryCode.trim()) {
           showError("Código de fábrica obligatorio");
           return;
         }
+        const familyCode = wizFamily.code || formFamily;
         const res = await fetch(`${API}/products`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({
             name: formName,
-            family: wizFamily.code,
+            family: familyCode,
             supplierId: wizSupplierId,
             factoryCode: wizFactoryCode.trim(),
             pricingMode: formPricingMode,
-            finishType: wizFamily.code === "REV" ? formFinishType || undefined : undefined,
+            finishType: familyCode === "REV" ? formFinishType || undefined : undefined,
             factoryCost: formPricingMode === "neto" ? formFactoryCost : undefined,
             profitMargin: formProfitMargin,
             pvpPrice: formPricingMode === "pvp" ? formPvpPrice : undefined,
@@ -411,7 +505,7 @@ export function AdminProductsPage() {
         const product = await res.json();
         setCreatedSku(product.sku);
         setWizardStep(3);
-        fetchData();
+        void fetchData();
       } else {
         setWizardOpen(false);
         setWizardStep(0);
@@ -470,9 +564,16 @@ export function AdminProductsPage() {
       ? formPvpPrice / (1 + formProfitMargin / 100)
       : formFactoryCost;
 
+  const supplierOptions =
+    familySuppliers.length > 0 ? familySuppliers : suppliers;
+  const selectedSupplier =
+    supplierOptions.find((s) => s.id === formSupplierId) ??
+    suppliers.find((s) => s.id === formSupplierId);
+  const skuPreviewPrefix = selectedSupplier?.prefix?.toUpperCase() ?? null;
+
   const saveDisabled =
     saving ||
-    !formName ||
+    !formName.trim() ||
     !formFamily ||
     (formFamily === "REV" && !formFinishType) ||
     (formPricingMode === "neto" && formFactoryCost <= 0) ||
@@ -480,7 +581,8 @@ export function AdminProductsPage() {
     formProfitMargin < 0 ||
     formProfitMargin > 100 ||
     !formSupplierId ||
-    !formSupplierFactoryCode.trim();
+    !formSupplierFactoryCode.trim() ||
+    !selectedSupplier?.prefix;
 
   return (
     <>
@@ -647,6 +749,7 @@ export function AdminProductsPage() {
                 const code = String(e.target.value);
                 setFormFamily(code);
                 setFormFinishType("");
+                setFormSupplierId("");
               }}
             >
               {families.map((f) => (
@@ -657,26 +760,48 @@ export function AdminProductsPage() {
             </LabeledSelect>
             <Divider sx={{ my: 1 }} />
             <Typography variant="subtitle2" color="text.secondary">
-              Proveedor (= subfamilia automática para pedido a fábrica)
+              Proveedor enlazado a la familia (prefijo → SKU y pedido a fábrica)
             </Typography>
             <LabeledSelect
               label="Proveedor"
               value={formSupplierId}
               emptyLabel={
-                loadingFactoryCode ? "Cargando…" : "Seleccionar proveedor"
+                !formFamily
+                  ? "Elige familia primero"
+                  : loadingFamilySuppliers || loadingFactoryCode
+                    ? "Cargando…"
+                    : supplierOptions.length === 0
+                      ? "No hay proveedores — créalos en Proveedores"
+                      : "Seleccionar proveedor"
               }
               required
               fullWidth
-              disabled={loadingFactoryCode}
+              disabled={!formFamily || loadingFamilySuppliers || loadingFactoryCode}
               formControlProps={{ fullWidth: true, required: true }}
               onChange={(e) => setFormSupplierId(String(e.target.value))}
             >
-              {suppliers.map((s) => (
-                <MenuItem key={s.id} value={s.id}>
-                  {s.name}
+              {supplierOptions.map((s) => (
+                <MenuItem key={s.id} value={s.id} disabled={!s.prefix}>
+                  {s.prefix ? `${s.prefix} — ${s.name}` : `${s.name} (sin prefijo)`}
                 </MenuItem>
               ))}
             </LabeledSelect>
+            {formFamily && !suppliersLinkedToFamily && supplierOptions.length > 0 && (
+                <Typography variant="caption" color="warning.main">
+                  Ningún proveedor enlazado a esta familia aún. Al guardar se enlaza el
+                  elegido.
+                </Typography>
+              )}
+            {formSupplierId && !selectedSupplier?.prefix && (
+              <Typography variant="caption" color="error">
+                Este proveedor no tiene prefijo SKU. Edítalo en Proveedores.
+              </Typography>
+            )}
+            {!editingProduct && skuPreviewPrefix && (
+              <Typography variant="body2" color="text.secondary" fontFamily="monospace">
+                SKU al guardar: {skuPreviewPrefix}-#####
+              </Typography>
+            )}
             <TextField
               label="Código de fábrica"
               value={formSupplierFactoryCode}
@@ -853,37 +978,80 @@ export function AdminProductsPage() {
 
       <Dialog open={wizardOpen} onClose={() => setWizardOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>
-          Asistente: {["Proveedor", "Familia", "Artículo + Código fábrica", "Completado"][wizardStep]}
+          Asistente: {["Familia", "Proveedor", "Artículo + Código fábrica", "Completado"][wizardStep]}
         </DialogTitle>
         <DialogContent>
           {wizardStep === 0 && (
             <Stack spacing={2} sx={{ mt: 1 }}>
-              <TextField label="Nombre proveedor" value={wizSupplier.name} onChange={(e) => setWizSupplier({ ...wizSupplier, name: e.target.value })} fullWidth />
-              <TextField label="Email" value={wizSupplier.email} onChange={(e) => setWizSupplier({ ...wizSupplier, email: e.target.value })} fullWidth />
-              <Typography variant="caption" color="text.secondary">
-                Este proveedor será la subfamilia del producto y agrupa el pedido a fábrica.
-              </Typography>
+              <LabeledSelect
+                label="Familia existente"
+                value={wizFamily.code}
+                emptyLabel="Crear nueva…"
+                fullWidth
+                formControlProps={{ fullWidth: true }}
+                onChange={(e) => {
+                  const code = String(e.target.value);
+                  const fam = families.find((f) => f.code === code);
+                  setWizFamily({ code, name: fam?.name ?? "" });
+                }}
+              >
+                {families.map((f) => (
+                  <MenuItem key={f.code} value={f.code}>
+                    {f.name}
+                  </MenuItem>
+                ))}
+              </LabeledSelect>
+              {!wizFamily.code && (
+                <TextField
+                  label="Nombre familia nueva"
+                  value={wizFamily.name}
+                  onChange={(e) => setWizFamily({ code: "", name: e.target.value })}
+                  fullWidth
+                  helperText="ID interno se genera solo. Prefijo SKU va en el proveedor."
+                />
+              )}
             </Stack>
           )}
           {wizardStep === 1 && (
             <Stack spacing={2} sx={{ mt: 1 }}>
               <TextField
-                label="Código familia (3 letras)"
-                value={wizFamily.code}
-                onChange={(e) => setWizFamily({ ...wizFamily, code: e.target.value.toUpperCase().slice(0, 3) })}
+                label="Nombre proveedor"
+                value={wizSupplier.name}
+                onChange={(e) => setWizSupplier({ ...wizSupplier, name: e.target.value })}
                 fullWidth
               />
-              <TextField label="Nombre familia" value={wizFamily.name} onChange={(e) => setWizFamily({ ...wizFamily, name: e.target.value })} fullWidth />
+              <TextField
+                label="Email"
+                value={wizSupplier.email}
+                onChange={(e) => setWizSupplier({ ...wizSupplier, email: e.target.value })}
+                fullWidth
+              />
+              <TextField
+                label="Prefijo SKU (3)"
+                value={wizSupplier.prefix}
+                onChange={(e) =>
+                  setWizSupplier({
+                    ...wizSupplier,
+                    prefix: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 3),
+                  })
+                }
+                fullWidth
+                helperText="SKU: PREFIJO-00001"
+                inputProps={{ maxLength: 3, style: { fontFamily: "monospace" } }}
+              />
               <Typography variant="caption" color="text.secondary">
-                La subfamilia se crea sola desde el proveedor del paso anterior.
+                Se enlaza a la familia del paso anterior. Pedidos a fábrica usan este proveedor.
               </Typography>
             </Stack>
           )}
           {wizardStep === 2 && (
             <Stack spacing={2} sx={{ mt: 1 }}>
+              <Typography variant="body2" color="text.secondary" fontFamily="monospace">
+                SKU: {wizSupplier.prefix.toUpperCase() || "???"}-#####
+              </Typography>
               <TextField label="Nombre artículo" value={formName} onChange={(e) => setFormName(e.target.value)} fullWidth />
               <TextField label="Código fábrica" value={wizFactoryCode} onChange={(e) => setWizFactoryCode(e.target.value)} fullWidth />
-              {wizFamily.code === "REV" && (
+              {(wizFamily.code || formFamily) === "REV" && (
                 <LabeledSelect
                   label="Tipo revestimiento"
                   value={formFinishType}
@@ -934,7 +1102,7 @@ export function AdminProductsPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setWizardOpen(false)}>Cerrar</Button>
-          <Button variant="contained" onClick={handleWizardNext} disabled={saving}>
+          <Button variant="contained" onClick={() => void handleWizardNext()} disabled={saving}>
             {wizardStep === 3 ? "Finalizar" : "Siguiente"}
           </Button>
         </DialogActions>

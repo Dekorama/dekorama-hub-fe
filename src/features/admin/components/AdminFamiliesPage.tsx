@@ -77,14 +77,14 @@ export function AdminFamiliesPage() {
   }
 
   async function saveFamily() {
-    const code = familyForm.code.trim().toUpperCase();
     const name = familyForm.name.trim();
-    if (!editingFamily && code.length !== 3) {
-      showError("Código familia: 3 letras");
-      return;
-    }
     if (!name) {
       showError("Nombre obligatorio");
+      return;
+    }
+    const code = familyForm.code.trim().toUpperCase();
+    if (code && code.length !== 3) {
+      showError("Código interno: 3 caracteres o vacío (auto)");
       return;
     }
     setSaving(true);
@@ -101,7 +101,7 @@ export function AdminFamiliesPage() {
             editingFamily
               ? { name, description: familyForm.description || null }
               : {
-                  code,
+                  ...(code ? { code } : {}),
                   name,
                   description: familyForm.description || undefined,
                 },
@@ -148,7 +148,8 @@ export function AdminFamiliesPage() {
       </Stack>
 
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        El proveedor del producto actúa como subfamilia interna para SKU y pedidos a fábrica.
+        Categoría de producto. El prefijo de SKU lo define el proveedor (enlazado a una o más
+        familias).
       </Typography>
 
       {loading ? (
@@ -159,7 +160,7 @@ export function AdminFamiliesPage() {
         <ResponsiveTable minWidth={560} paperSx={{ borderRadius: 3 }}>
           <TableHead>
               <TableRow>
-                <TableCell>Código</TableCell>
+                <TableCell>ID</TableCell>
                 <TableCell>Nombre</TableCell>
                 <TableCell>Descripción</TableCell>
                 <TableCell align="right">Acciones</TableCell>
@@ -202,16 +203,19 @@ export function AdminFamiliesPage() {
         <DialogTitle>{editingFamily ? "Editar familia" : "Nueva familia"}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              label="Código (3 letras)"
-              value={familyForm.code}
-              onChange={(e) =>
-                setFamilyForm({ ...familyForm, code: e.target.value.toUpperCase().slice(0, 3) })
-              }
-              disabled={!!editingFamily}
-              required
-              fullWidth
-            />
+            {editingFamily ? (
+              <TextField label="ID" value={familyForm.code} disabled fullWidth />
+            ) : (
+              <TextField
+                label="ID interno (opcional)"
+                value={familyForm.code}
+                onChange={(e) =>
+                  setFamilyForm({ ...familyForm, code: e.target.value.toUpperCase().slice(0, 3) })
+                }
+                fullWidth
+                helperText="3 caracteres. Vacío = se genera del nombre. No es el prefijo de SKU."
+              />
+            )}
             <TextField
               label="Nombre"
               value={familyForm.name}

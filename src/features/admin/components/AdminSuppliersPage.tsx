@@ -10,9 +10,13 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
   FormControlLabel,
   IconButton,
+  InputLabel,
   MenuItem,
+  OutlinedInput,
+  Select,
   Stack,
   TableBody,
   TableCell,
@@ -20,7 +24,9 @@ import {
   TableRow,
   TextField,
   Typography,
+  Chip,
 } from "@mui/material";
+import type { SelectChangeEvent } from "@mui/material/Select";
 import { Add, Delete, Edit } from "@mui/icons-material";
 import { useCurrentUser, API } from "@/features/auth/hooks/useCurrentUser";
 import { useAppSnackbar } from "@/shared/hooks/useAppSnackbar";
@@ -36,9 +42,16 @@ import {
 } from "@/shared/utils/market";
 import type { ClientDocumentType, ClientLegalType } from "@/shared/utils/userLabels";
 
+interface Family {
+  code: string;
+  name: string;
+}
+
 interface Supplier {
   id: string;
   name: string;
+  prefix: string | null;
+  familyCodes: string[];
   legalType: ClientLegalType | null;
   documentType: ClientDocumentType | null;
   documentNumber: string | null;
@@ -56,6 +69,8 @@ interface Supplier {
 
 interface SupplierForm {
   name: string;
+  prefix: string;
+  familyCodes: string[];
   legalType: ClientLegalType;
   documentType: ClientDocumentType;
   documentNumber: string;
@@ -71,6 +86,8 @@ interface SupplierForm {
 function buildEmptyForm(market: MarketCode): SupplierForm {
   return {
     name: "",
+    prefix: "",
+    familyCodes: [],
     legalType: "empresa",
     documentType: defaultSupplierDocumentType(market),
     documentNumber: "",
@@ -97,6 +114,7 @@ export function AdminSuppliersPage() {
   const { market } = useAdminMarket();
   const { showSuccess, showError, SnackbarHost } = useAppSnackbar();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [families, setFamilies] = useState<Family[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Supplier | null>(null);
@@ -108,6 +126,12 @@ export function AdminSuppliersPage() {
     [market, form.legalType],
   );
 
+  const familyNameByCode = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const f of families) map.set(f.code, f.name);
+    return map;
+  }, [families]);
+
   useEffect(() => {
     setForm((prev) => {
       const stillValid = documentOptions.some((o) => o.value === prev.documentType);
@@ -118,6 +142,12 @@ export function AdminSuppliersPage() {
       };
     });
   }, [documentOptions, market]);
+
+  const fetchFamilies = useCallback(async () => {
+    const res = await fetch(`${API}/products/families/all`, { credentials: "include" });
+    if (!res.ok) return;
+    setFamilies((await res.json()) as Family[]);
+  }, []);
 
   const fetchSuppliers = useCallback(async () => {
     setLoading(true);
@@ -136,8 +166,11 @@ export function AdminSuppliersPage() {
   }, [market, showError]);
 
   useEffect(() => {
-    if (user?.role === "admin") void fetchSuppliers();
-  }, [user, fetchSuppliers]);
+    if (user?.role === "admin") {
+      void fetchSuppliers();
+      void fetchFamilies();
+    }
+  }, [user, fetchSuppliers, fetchFamilies]);
 
   function openCreate() {
     setEditing(null);
@@ -157,6 +190,8 @@ export function AdminSuppliersPage() {
         : (options[0]?.value ?? defaultSupplierDocumentType(market));
     setForm({
       name: s.name,
+      prefix: s.prefix ?? "",
+      familyCodes: s.familyCodes ?? [],
       legalType,
       documentType,
       documentNumber: s.documentNumber ?? "",
@@ -215,6 +250,15 @@ export function AdminSuppliersPage() {
       showError("Nombre y al menos un email son obligatorios");
       return;
     }
+    const prefix = form.prefix.trim().toUpperCase();
+    if (prefix.length !== 3) {
+      showError("Prefijo SKU: 3 caracteres");
+      return;
+    }
+    if (form.familyCodes.length === 0) {
+      showError("Selecciona al menos una familia");
+      return;
+    }
 
     const [primaryEmail, ...extraEmails] = trimmedEmails;
     const trimmedPhones = form.phones.map((p) => p.trim()).filter(Boolean);
@@ -231,6 +275,8 @@ export function AdminSuppliersPage() {
         credentials: "include",
         body: JSON.stringify({
           name: form.name.trim(),
+          prefix,
+          familyCodes: form.familyCodes,
           legalType: form.legalType,
           documentType: form.documentNumber.trim() ? form.documentType : null,
           documentNumber: form.documentNumber.trim() || null,
@@ -262,6 +308,14 @@ export function AdminSuppliersPage() {
     }
   }
 
+  function handleFamiliesChange(event: SelectChangeEvent<string[]>) {
+    const value = event.target.value;
+    setForm((prev) => ({
+      ...prev,
+      familyCodes: typeof value === "string" ? value.split(",") : value,
+    }));
+  }
+
   return (
     <>
       <Stack direction="row" justifyContent="space-between" sx={{ mb: 2 }}>
@@ -279,7 +333,9 @@ export function AdminSuppliersPage() {
         <ResponsiveTable minWidth={720} paperSx={{ borderRadius: 3 }}>
           <TableHead>
               <TableRow>
+                <TableCell>Prefijo</TableCell>
                 <TableCell>Nombre</TableCell>
+                <TableCell>Familias</TableCell>
                 <TableCell>Documento</TableCell>
                 <TableCell>Email</TableCell>
                 <TableCell>Teléfono</TableCell>
@@ -292,7 +348,7 @@ export function AdminSuppliersPage() {
             <TableBody>
               {suppliers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={10} align="center" sx={{ py: 4 }}>
                     <Typography color="text.secondary">No hay proveedores</Typography>
                   </TableCell>
                 </TableRow>
@@ -305,7 +361,19 @@ export function AdminSuppliersPage() {
                     : null;
                   return (
                     <TableRow key={s.id}>
+                      <TableCell>
+                        <Typography fontFamily="monospace" fontWeight={600}>
+                          {s.prefix ?? "—"}
+                        </Typography>
+                      </TableCell>
                       <TableCell>{s.name}</TableCell>
+                      <TableCell>
+                        {(s.familyCodes ?? []).length === 0
+                          ? "—"
+                          : (s.familyCodes ?? [])
+                              .map((c) => familyNameByCode.get(c) ?? c)
+                              .join(", ")}
+                      </TableCell>
                       <TableCell>
                         {s.documentNumber
                           ? `${docLabel ?? "Doc"} ${s.documentNumber}`
@@ -362,6 +430,49 @@ export function AdminSuppliersPage() {
               required
               fullWidth
             />
+
+            <TextField
+              label="Prefijo SKU (3 letras)"
+              value={form.prefix}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  prefix: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 3),
+                })
+              }
+              required
+              fullWidth
+              helperText="SKU del producto: PREFIJO-00001"
+              inputProps={{ maxLength: 3, style: { fontFamily: "monospace", letterSpacing: 2 } }}
+            />
+
+            <FormControl fullWidth required>
+              <InputLabel id="supplier-families-label">Familias</InputLabel>
+              <Select
+                labelId="supplier-families-label"
+                multiple
+                value={form.familyCodes}
+                onChange={handleFamiliesChange}
+                input={<OutlinedInput label="Familias" />}
+                renderValue={(selected) => (
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                    {selected.map((code) => (
+                      <Chip
+                        key={code}
+                        size="small"
+                        label={familyNameByCode.get(code) ?? code}
+                      />
+                    ))}
+                  </Box>
+                )}
+              >
+                {families.map((f) => (
+                  <MenuItem key={f.code} value={f.code}>
+                    {f.name} ({f.code})
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
 
             <TextField
               select
