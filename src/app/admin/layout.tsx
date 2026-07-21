@@ -21,7 +21,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           <AdminMarketSwitcher />
           <AdminNav />
         </Box>
-        <Box sx={{ flex: 1, pt: 1 }}>
+        <Box sx={{ flex: 1, pt: 2 }}>
           {loading ? (
             <Box display="flex" justifyContent="center" alignItems="center" minHeight={320}>
               <CircularProgress size={32} />

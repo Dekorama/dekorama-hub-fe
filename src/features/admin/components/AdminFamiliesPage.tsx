@@ -2,9 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  Box,
   Button,
-  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -22,7 +20,8 @@ import { Add, Delete, Edit } from "@mui/icons-material";
 import { useCurrentUser, API } from "@/features/auth/hooks/useCurrentUser";
 import { useAppSnackbar } from "@/shared/hooks/useAppSnackbar";
 import { readApiError } from "@/features/admin/utils/readApiError";
-import { ResponsiveTable } from "@/shared/ui";
+import { AdminPageHeader } from "@/features/admin/components/AdminPageHeader";
+import { ResponsiveTable, TableEmptyRow, TableLoadingRow } from "@/shared/ui";
 
 interface Family {
   code: string;
@@ -140,64 +139,54 @@ export function AdminFamiliesPage() {
 
   return (
     <>
-      <Stack direction="row" justifyContent="space-between" sx={{ mb: 2 }}>
-        <Typography variant="h5">Familias</Typography>
-        <Button variant="contained" startIcon={<Add />} onClick={openCreateFamily}>
-          Nueva familia
-        </Button>
-      </Stack>
+      <AdminPageHeader
+        title="Familias"
+        subtitle="Categoría de producto. El prefijo de SKU lo define el proveedor (enlazado a una o más familias)."
+        actions={
+          <Button variant="contained" startIcon={<Add />} onClick={openCreateFamily}>
+            Nueva familia
+          </Button>
+        }
+      />
 
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Categoría de producto. El prefijo de SKU lo define el proveedor (enlazado a una o más
-        familias).
-      </Typography>
-
-      {loading ? (
-        <Box display="flex" justifyContent="center" py={6}>
-          <CircularProgress />
-        </Box>
-      ) : (
-        <ResponsiveTable minWidth={560} paperSx={{ borderRadius: 3 }}>
-          <TableHead>
-              <TableRow>
-                <TableCell>ID</TableCell>
-                <TableCell>Nombre</TableCell>
-                <TableCell>Descripción</TableCell>
-                <TableCell align="right">Acciones</TableCell>
+      <ResponsiveTable minWidth={560}>
+        <TableHead>
+          <TableRow>
+            <TableCell>ID</TableCell>
+            <TableCell>Nombre</TableCell>
+            <TableCell>Descripción</TableCell>
+            <TableCell align="right">Acciones</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {loading ? (
+            <TableLoadingRow colSpan={4} />
+          ) : families.length === 0 ? (
+            <TableEmptyRow colSpan={4} message="Sin familias" />
+          ) : (
+            families.map((f) => (
+              <TableRow key={f.code} hover>
+                <TableCell>{f.code}</TableCell>
+                <TableCell>{f.name}</TableCell>
+                <TableCell>{f.description ?? "—"}</TableCell>
+                <TableCell align="right">
+                  <IconButton size="small" onClick={() => openEditFamily(f)} aria-label="Editar">
+                    <Edit fontSize="small" />
+                  </IconButton>
+                  <IconButton
+                    size="small"
+                    color="error"
+                    onClick={() => void deleteFamily(f.code)}
+                    aria-label="Eliminar"
+                  >
+                    <Delete fontSize="small" />
+                  </IconButton>
+                </TableCell>
               </TableRow>
-            </TableHead>
-            <TableBody>
-              {families.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} align="center" sx={{ py: 4 }}>
-                    <Typography color="text.secondary">Sin familias</Typography>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                families.map((f) => (
-                  <TableRow key={f.code} hover>
-                    <TableCell>{f.code}</TableCell>
-                    <TableCell>{f.name}</TableCell>
-                    <TableCell>{f.description ?? "—"}</TableCell>
-                    <TableCell align="right">
-                      <IconButton size="small" onClick={() => openEditFamily(f)} aria-label="Editar">
-                        <Edit fontSize="small" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={() => void deleteFamily(f.code)}
-                        aria-label="Eliminar"
-                      >
-                        <Delete fontSize="small" />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-        </ResponsiveTable>
-      )}
+            ))
+          )}
+        </TableBody>
+      </ResponsiveTable>
 
       <Dialog open={familyDialogOpen} onClose={() => !saving && setFamilyDialogOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>{editingFamily ? "Editar familia" : "Nueva familia"}</DialogTitle>

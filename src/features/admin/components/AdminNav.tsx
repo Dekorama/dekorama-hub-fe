@@ -1,9 +1,10 @@
 "use client";
 
-import { Box, Button, Stack } from "@mui/material";
+import { Box, Button, Tab } from "@mui/material";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { API } from "@/features/auth/hooks/useCurrentUser";
+import { ScrollableTabs } from "@/shared/ui";
 
 const LINKS = [
   { href: "/admin", label: "General" },
@@ -16,10 +17,20 @@ const LINKS = [
   { href: "/admin/pedidos-proveedor", label: "Pedidos Proveedor" },
   { href: "/admin/reportes", label: "Reportes" },
   { href: "/admin/configuracion", label: "Configuración" },
-];
+] as const;
+
+function activeHref(pathname: string): string {
+  const match = LINKS.find((link) =>
+    link.href === "/admin"
+      ? pathname === "/admin"
+      : pathname === link.href || pathname.startsWith(`${link.href}/`),
+  );
+  return match?.href ?? "/admin";
+}
 
 export function AdminNav() {
   const pathname = usePathname();
+  const value = activeHref(pathname);
 
   return (
     <Box
@@ -30,46 +41,30 @@ export function AdminNav() {
         bgcolor: "background.default",
         borderBottom: 1,
         borderColor: "divider",
-        pb: 1.5,
-        mb: 0,
       }}
     >
-      <Stack
-        direction="row"
-        spacing={0.75}
+      <ScrollableTabs
+        value={value}
         sx={{
-          overflowX: "auto",
-          flexWrap: "nowrap",
-          pb: 0.5,
-          "&::-webkit-scrollbar": { height: 4 },
-          "&::-webkit-scrollbar-thumb": { bgcolor: "divider", borderRadius: 2 },
+          minHeight: 44,
+          "& .MuiTab-root": {
+            minHeight: 44,
+            textTransform: "none",
+            fontWeight: 500,
+            px: 1.5,
+          },
         }}
       >
-        {LINKS.map((link) => {
-          const active =
-            link.href === "/admin"
-              ? pathname === "/admin"
-              : pathname === link.href || pathname.startsWith(`${link.href}/`);
-
-          return (
-            <Button
-              key={link.href}
-              component={Link}
-              href={link.href}
-              variant={active ? "contained" : "outlined"}
-              size="small"
-              sx={{
-                flexShrink: 0,
-                whiteSpace: "nowrap",
-                minWidth: "auto",
-                px: 2,
-              }}
-            >
-              {link.label}
-            </Button>
-          );
-        })}
-      </Stack>
+        {LINKS.map((link) => (
+          <Tab
+            key={link.href}
+            value={link.href}
+            label={link.label}
+            component={Link}
+            href={link.href}
+          />
+        ))}
+      </ScrollableTabs>
     </Box>
   );
 }

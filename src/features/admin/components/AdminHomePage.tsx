@@ -36,7 +36,7 @@ import { AdminTabPanel } from "@/features/admin/components/AdminTabPanel";
 import { useAdminMarket } from "@/features/admin/context/AdminMarketContext";
 import { adminApiUrl } from "@/features/admin/utils/adminApi";
 import { LabeledSelect } from "@/shared/components/LabeledSelect";
-import { PageToolbar, ResponsiveTable, ScrollableTabs } from "@/shared/ui";
+import { PageToolbar, ResponsiveTable, ScrollableTabs, TableEmptyRow, TableLoadingRow } from "@/shared/ui";
 
 interface PendingUser {
   id: string;
@@ -536,108 +536,99 @@ export function AdminHomePage() {
                 </Button>
               </PageToolbar>
 
-              {loadingInvoices ? (
-                <Box display="flex" justifyContent="center" py={6}>
-                  <CircularProgress size={28} />
-                </Box>
-              ) : (
-                <>
-                <ResponsiveTable minWidth={720} paperSx={{ borderRadius: 3 }}>
-                  <TableHead>
-                      <TableRow>
-                        <TableCell>Número</TableCell>
-                        <TableCell>Cliente</TableCell>
-                        <TableCell>Fecha</TableCell>
-                        <TableCell align="right">Subtotal</TableCell>
-                        <TableCell align="right">IVA</TableCell>
-                        <TableCell align="right">Total</TableCell>
-                        <TableCell>Estado</TableCell>
-                        <TableCell align="center">Acciones</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {invoices
-                        .filter((inv) =>
-                          searchInvoice
-                            ? inv.invoiceNumber.toLowerCase().includes(searchInvoice.toLowerCase()) ||
-                              inv.clientName.toLowerCase().includes(searchInvoice.toLowerCase())
-                            : true
-                        )
-                        .map((invoice) => (
-                          <TableRow key={invoice.id}>
-                            <TableCell>{invoice.invoiceNumber}</TableCell>
-                            <TableCell>{invoice.clientName}</TableCell>
-                            <TableCell>
-                              {new Date(invoice.issueDate).toLocaleDateString()}
-                            </TableCell>
-                            <TableCell align="right">
-                              ${invoice.subtotal.toFixed(2)}
-                            </TableCell>
-                            <TableCell align="right">
-                              ${invoice.taxAmount.toFixed(2)}
-                            </TableCell>
-                            <TableCell align="right">
-                              <strong>${invoice.total.toFixed(2)}</strong>
-                            </TableCell>
-                            <TableCell>
-                              <Chip
-                                label={invoice.status}
-                                color={
-                                  invoice.status === "paid"
-                                    ? "success"
-                                    : invoice.status === "issued"
-                                    ? "primary"
-                                    : invoice.status === "draft"
-                                    ? "default"
-                                    : "error"
-                                }
+              <ResponsiveTable minWidth={720}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Número</TableCell>
+                    <TableCell>Cliente</TableCell>
+                    <TableCell>Fecha</TableCell>
+                    <TableCell align="right">Subtotal</TableCell>
+                    <TableCell align="right">IVA</TableCell>
+                    <TableCell align="right">Total</TableCell>
+                    <TableCell>Estado</TableCell>
+                    <TableCell align="center">Acciones</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {loadingInvoices ? (
+                    <TableLoadingRow colSpan={8} />
+                  ) : invoices.length === 0 ? (
+                    <TableEmptyRow colSpan={8} message="No hay facturas registradas." />
+                  ) : (
+                    invoices
+                      .filter((inv) =>
+                        searchInvoice
+                          ? inv.invoiceNumber.toLowerCase().includes(searchInvoice.toLowerCase()) ||
+                            inv.clientName.toLowerCase().includes(searchInvoice.toLowerCase())
+                          : true
+                      )
+                      .map((invoice) => (
+                        <TableRow key={invoice.id}>
+                          <TableCell>{invoice.invoiceNumber}</TableCell>
+                          <TableCell>{invoice.clientName}</TableCell>
+                          <TableCell>
+                            {new Date(invoice.issueDate).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell align="right">
+                            ${invoice.subtotal.toFixed(2)}
+                          </TableCell>
+                          <TableCell align="right">
+                            ${invoice.taxAmount.toFixed(2)}
+                          </TableCell>
+                          <TableCell align="right">
+                            <strong>${invoice.total.toFixed(2)}</strong>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={invoice.status}
+                              color={
+                                invoice.status === "paid"
+                                  ? "success"
+                                  : invoice.status === "issued"
+                                  ? "primary"
+                                  : invoice.status === "draft"
+                                  ? "default"
+                                  : "error"
+                              }
+                              size="small"
+                            />
+                          </TableCell>
+                          <TableCell align="center">
+                            <Stack direction="row" spacing={1} justifyContent="center">
+                              <IconButton
                                 size="small"
-                              />
-                            </TableCell>
-                            <TableCell align="center">
-                              <Stack direction="row" spacing={1} justifyContent="center">
+                                onClick={() => openViewInvoice(invoice)}
+                                title="Ver detalles"
+                              >
+                                <Visibility fontSize="small" />
+                              </IconButton>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleDownloadPdf(invoice.id)}
+                                title="Descargar PDF"
+                              >
+                                <PictureAsPdf fontSize="small" />
+                              </IconButton>
+                              {invoice.status === "draft" && (
                                 <IconButton
                                   size="small"
-                                  onClick={() => openViewInvoice(invoice)}
-                                  title="Ver detalles"
+                                  color="error"
+                                  onClick={() => {
+                                    setInvoiceToDelete(invoice);
+                                    setDeleteInvoiceDialog(true);
+                                  }}
+                                  title="Eliminar"
                                 >
-                                  <Visibility fontSize="small" />
+                                  <Delete fontSize="small" />
                                 </IconButton>
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleDownloadPdf(invoice.id)}
-                                  title="Descargar PDF"
-                                >
-                                  <PictureAsPdf fontSize="small" />
-                                </IconButton>
-                                {invoice.status === "draft" && (
-                                  <IconButton
-                                    size="small"
-                                    color="error"
-                                    onClick={() => {
-                                      setInvoiceToDelete(invoice);
-                                      setDeleteInvoiceDialog(true);
-                                    }}
-                                    title="Eliminar"
-                                  >
-                                    <Delete fontSize="small" />
-                                  </IconButton>
-                                )}
-                              </Stack>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                    </TableBody>
-                </ResponsiveTable>
-                {invoices.length === 0 && (
-                  <Box p={4} textAlign="center">
-                    <Typography color="text.secondary">
-                      No hay facturas registradas.
-                    </Typography>
-                  </Box>
-                )}
-                </>
-              )}
+                              )}
+                            </Stack>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                  )}
+                </TableBody>
+              </ResponsiveTable>
         </Stack>
       </AdminTabPanel>
 

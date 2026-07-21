@@ -2,20 +2,21 @@
 
 import { useEffect, useState } from "react";
 import {
-  Button, Chip, Paper, Stack, TableBody, TableCell,
-  TableHead, TableRow, Typography,
+  Button, Chip, TableBody, TableCell,
+  TableHead, TableRow,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import Link from "next/link";
 import { useCurrentUser } from "@/features/auth/hooks/useCurrentUser";
 import { useAdminMarket } from "@/features/admin/context/AdminMarketContext";
 import { adminApiUrl } from "@/features/admin/utils/adminApi";
+import { AdminPageHeader } from "@/features/admin/components/AdminPageHeader";
 import {
   getProposalStatusColor,
   getProposalStatusLabel,
   getProposalTypeLabel,
 } from "@/shared/utils/proposalLabels";
-import { ResponsiveTable } from "@/shared/ui";
+import { ResponsiveTable, TableEmptyRow, TableLoadingRow } from "@/shared/ui";
 
 interface Proposal {
   id: string;
@@ -32,49 +33,50 @@ export function AdminBudgetsPage() {
   const { user } = useCurrentUser();
   const { market } = useAdminMarket();
   const [proposals, setProposals] = useState<Proposal[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user?.role === "admin") {
-      fetch(adminApiUrl("/proposals/solicitudes", market), { credentials: "include" })
-        .then((r) => (r.ok ? r.json() : []))
-        .then(setProposals);
-    }
+    if (user?.role !== "admin") return;
+    setLoading(true);
+    fetch(adminApiUrl("/proposals/solicitudes", market), { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setProposals)
+      .finally(() => setLoading(false));
   }, [user, market]);
 
   return (
     <>
-      <Stack
-        direction="row"
-        justifyContent="space-between"
-        alignItems="center"
-        sx={{ mb: 2 }}
-        flexWrap="wrap"
-        useFlexGap
-        spacing={1}
-      >
-        <Typography variant="h5">Presupuestos y Solicitudes</Typography>
-        <Button
-          component={Link}
-          href="/admin/presupuestos/nuevo"
-          variant="contained"
-          startIcon={<AddIcon />}
-        >
-          Nuevo presupuesto
-        </Button>
-      </Stack>
-      <ResponsiveTable minWidth={640} paperSx={{ borderRadius: 3 }}>
+      <AdminPageHeader
+        title="Presupuestos y Solicitudes"
+        actions={
+          <Button
+            component={Link}
+            href="/admin/presupuestos/nuevo"
+            variant="contained"
+            startIcon={<AddIcon />}
+          >
+            Nuevo presupuesto
+          </Button>
+        }
+      />
+      <ResponsiveTable minWidth={640}>
         <TableHead>
-            <TableRow>
-              <TableCell>Tipo</TableCell>
-              <TableCell>Título</TableCell>
-              <TableCell>Cliente</TableCell>
-              <TableCell>Estado</TableCell>
-              <TableCell>Fecha</TableCell>
-              <TableCell>Acciones</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {proposals.map((p) => (
+          <TableRow>
+            <TableCell>Tipo</TableCell>
+            <TableCell>Título</TableCell>
+            <TableCell>Cliente</TableCell>
+            <TableCell>Estado</TableCell>
+            <TableCell>Fecha</TableCell>
+            <TableCell>Acciones</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {loading ? (
+            <TableLoadingRow colSpan={6} />
+          ) : proposals.length === 0 ? (
+            <TableEmptyRow colSpan={6} message="No hay solicitudes pendientes" />
+          ) : (
+            proposals.map((p) => (
               <TableRow key={p.id}>
                 <TableCell>
                   <Chip label={getProposalTypeLabel(p.type)} size="small" variant="outlined" />
@@ -95,15 +97,9 @@ export function AdminBudgetsPage() {
                   </Button>
                 </TableCell>
               </TableRow>
-            ))}
-            {proposals.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={6} align="center">
-                  No hay solicitudes pendientes
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
+            ))
+          )}
+        </TableBody>
       </ResponsiveTable>
     </>
   );

@@ -18,7 +18,7 @@ import {
 } from "@mui/material";
 import { Add as AddIcon, Send as SendIcon } from "@mui/icons-material";
 import { API } from "@/features/auth/hooks/useCurrentUser";
-import { ResponsiveTable } from "@/shared/ui";
+import { ResponsiveTable, TableEmptyRow, TableLoadingRow } from "@/shared/ui";
 
 interface AdminInvitation {
   id: string;
@@ -32,23 +32,24 @@ export function AdminInvitationsTab() {
   const [currentEmail, setCurrentEmail] = useState("");
   const [invitations, setInvitations] = useState<AdminInvitation[]>([]);
   const [loading, setLoading] = useState(false);
+  const [listLoading, setListLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
   const handleAddEmail = () => {
     const trimmed = currentEmail.trim().toLowerCase();
     if (!trimmed) return;
-    
+
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
       setError("Email inválido");
       return;
     }
-    
+
     if (emails.includes(trimmed)) {
       setError("Email ya agregado");
       return;
     }
-    
+
     setEmails([...emails, trimmed]);
     setCurrentEmail("");
     setError("");
@@ -81,17 +82,18 @@ export function AdminInvitationsTab() {
       }
 
       const newInvitations = await res.json();
-      setSuccess(`${newInvitations.length} invitación(es) enviada(s) ✅`);
+      setSuccess(`${newInvitations.length} invitación(es) enviada(s)`);
       setEmails([]);
-      loadInvitations();
-    } catch (err: any) {
-      setError(err.message);
+      void loadInvitations();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Error al enviar invitaciones");
     } finally {
       setLoading(false);
     }
   };
 
   const loadInvitations = async () => {
+    setListLoading(true);
     try {
       const res = await fetch(`${API}/admin/invitations`, {
         credentials: "include",
@@ -101,11 +103,13 @@ export function AdminInvitationsTab() {
       }
     } catch (err) {
       console.error("Error loading invitations:", err);
+    } finally {
+      setListLoading(false);
     }
   };
 
   useEffect(() => {
-    loadInvitations();
+    void loadInvitations();
   }, []);
 
   return (
@@ -122,7 +126,7 @@ export function AdminInvitationsTab() {
         </Alert>
       )}
 
-      <Paper sx={{ p: 3, borderRadius: 3 }}>
+      <Paper sx={{ p: 3 }}>
         <Typography variant="h6" gutterBottom>
           Invitar Administradores
         </Typography>
@@ -131,7 +135,7 @@ export function AdminInvitationsTab() {
           Se usará <strong>admin@dekoramagroup.com</strong> como remitente.
         </Typography>
 
-        <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mb: 2 }}>
           <TextField
             fullWidth
             label="Email del nuevo admin"
@@ -144,6 +148,7 @@ export function AdminInvitationsTab() {
             variant="outlined"
             onClick={handleAddEmail}
             startIcon={<AddIcon />}
+            sx={{ flexShrink: 0 }}
           >
             Agregar
           </Button>
@@ -154,14 +159,13 @@ export function AdminInvitationsTab() {
             <Typography variant="body2" sx={{ mb: 1 }}>
               Emails agregados ({emails.length}):
             </Typography>
-            <Stack direction="row" spacing={1} flexWrap="wrap">
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
               {emails.map((email) => (
                 <Chip
                   key={email}
                   label={email}
                   onDelete={() => handleRemoveEmail(email)}
                   color="primary"
-                  sx={{ mb: 1 }}
                 />
               ))}
             </Stack>
@@ -170,7 +174,7 @@ export function AdminInvitationsTab() {
 
         <Button
           variant="contained"
-          onClick={handleSendInvitations}
+          onClick={() => void handleSendInvitations()}
           disabled={loading || emails.length === 0}
           startIcon={loading ? <CircularProgress size={20} /> : <SendIcon />}
           fullWidth
@@ -179,26 +183,26 @@ export function AdminInvitationsTab() {
         </Button>
       </Paper>
 
-      <Paper sx={{ p: 3, borderRadius: 3 }}>
+      <Box>
         <Typography variant="h6" gutterBottom>
           Historial de Invitaciones
         </Typography>
 
-        {invitations.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
-            No has enviado invitaciones aún.
-          </Typography>
-        ) : (
-          <ResponsiveTable minWidth={480} paperSx={{ borderRadius: 3 }}>
-            <TableHead>
-              <TableRow>
-                <TableCell>Email</TableCell>
-                <TableCell>Estado</TableCell>
-                <TableCell>Fecha de Envío</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {invitations.map((inv) => (
+        <ResponsiveTable minWidth={480}>
+          <TableHead>
+            <TableRow>
+              <TableCell>Email</TableCell>
+              <TableCell>Estado</TableCell>
+              <TableCell>Fecha de Envío</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {listLoading ? (
+              <TableLoadingRow colSpan={3} />
+            ) : invitations.length === 0 ? (
+              <TableEmptyRow colSpan={3} message="No has enviado invitaciones aún." />
+            ) : (
+              invitations.map((inv) => (
                 <TableRow key={inv.id}>
                   <TableCell>{inv.inviteeEmail}</TableCell>
                   <TableCell>
@@ -224,11 +228,11 @@ export function AdminInvitationsTab() {
                     {new Date(inv.createdAt).toLocaleDateString()}
                   </TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </ResponsiveTable>
-        )}
-      </Paper>
+              ))
+            )}
+          </TableBody>
+        </ResponsiveTable>
+      </Box>
     </Stack>
   );
 }

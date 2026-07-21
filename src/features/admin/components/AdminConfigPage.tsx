@@ -7,10 +7,10 @@ import {
   Paper,
   Stack,
   TextField,
-  Typography,
 } from "@mui/material";
 import { API } from "@/features/auth/hooks/useCurrentUser";
 import { useAdminMarket } from "@/features/admin/context/AdminMarketContext";
+import { AdminPageHeader } from "@/features/admin/components/AdminPageHeader";
 import { getMarketLabel } from "@/shared/utils/market";
 
 interface SettingsForm {
@@ -95,12 +95,10 @@ export function AdminConfigPage() {
 
   return (
     <>
-      <Typography variant="h5" sx={{ mb: 2 }}>
-        Configuración de {getMarketLabel(market)}
-      </Typography>
-      <Typography color="text.secondary" sx={{ mb: 2 }}>
-        Cambia tienda con el selector superior. Los cambios aplican solo a {config.storeName}.
-      </Typography>
+      <AdminPageHeader
+        title={`Configuración de ${getMarketLabel(market)}`}
+        subtitle={`Cambia tienda con el selector superior. Los cambios aplican solo a ${config.storeName}.`}
+      />
 
       {message && (
         <Alert severity={message.type} sx={{ mb: 2 }}>

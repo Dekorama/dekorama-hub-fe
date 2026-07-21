@@ -72,8 +72,9 @@ Use shared primitives — do not reinvent:
 - `ResponsiveTable` — tables (horizontal scroll on small screens)
 - `ScrollableTabs` — tab bars
 - `PageToolbar` — filter/action rows that stack on `xs`
+- `TableLoadingRow` / `TableEmptyRow` — in-table loading spinner and empty message rows
 
-Import: `import { ResponsiveTable, ScrollableTabs, PageToolbar } from "@/shared/ui"`.
+Import: `import { ResponsiveTable, ScrollableTabs, PageToolbar, TableLoadingRow, TableEmptyRow } from "@/shared/ui"`.
 
 ### New screen checklist
 

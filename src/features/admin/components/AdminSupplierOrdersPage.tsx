@@ -28,6 +28,7 @@ import {
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import { ExportButton } from "@/features/admin/components/AdminNav";
+import { AdminPageHeader } from "@/features/admin/components/AdminPageHeader";
 import { LabeledSelect } from "@/shared/components/LabeledSelect";
 import { useCurrentUser, API } from "@/features/auth/hooks/useCurrentUser";
 import { useAppSnackbar } from "@/shared/hooks/useAppSnackbar";
@@ -41,7 +42,7 @@ import {
   formatSupplierOrderStatus,
   supplierOrderTotal,
 } from "@/shared/utils/supplierOrderLabels";
-import { ResponsiveTable } from "@/shared/ui";
+import { ResponsiveTable, TableEmptyRow, TableLoadingRow } from "@/shared/ui";
 
 interface Supplier {
   id: string;
@@ -476,138 +477,126 @@ export function AdminSupplierOrdersPage() {
 
   return (
     <>
-      <Stack direction="row" justifyContent="space-between" sx={{ mb: 2 }} flexWrap="wrap" gap={1}>
-        <Stack spacing={0.5}>
-          <Typography variant="h5">Pedidos a Proveedor</Typography>
-          {clientOrderFilter && (
-            <Typography variant="body2" color="text.secondary">
-              Filtrado por pedido cliente ·{" "}
-              <Link href="/admin/pedidos-proveedor">Quitar filtro</Link>
-            </Typography>
-          )}
-        </Stack>
-        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-          <ExportButton endpoint="/admin/exports/supplier-orders" label="Exportar PO" market={market} />
-          <ExportButton
-            endpoint="/admin/exports/supplier-invoices"
-            label="Exportar facturas"
-            market={market}
-          />
-          <Button variant="contained" onClick={() => setCreateOpen(true)}>
-            Nuevo PO (manual)
-          </Button>
-          <Button variant="outlined" onClick={() => setInvoiceOpen(true)}>
-            Registrar factura
-          </Button>
-        </Stack>
-      </Stack>
-
-      {loading ? (
-        <Box display="flex" justifyContent="center" py={6}>
-          <CircularProgress />
-        </Box>
-      ) : (
-        <>
-          <Box sx={{ mb: 3 }}>
-            <ResponsiveTable minWidth={800} paperSx={{ borderRadius: 3 }}>
-              <TableHead>
-                <TableRow>
-                  <TableCell width={48} />
-                  <TableCell>Número</TableCell>
-                  <TableCell>Pedido cliente</TableCell>
-                  <TableCell>Proveedor</TableCell>
-                  <TableCell>Estado</TableCell>
-                  <TableCell>Total coste</TableCell>
-                  <TableCell>Fecha</TableCell>
-                  <TableCell>Acciones</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredOrders.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
-                      <Typography color="text.secondary">No hay pedidos a proveedor</Typography>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredOrders.map((o) => (
-                    <OrderRow
-                      key={o.id}
-                      order={o}
-                      currency={config.currency}
-                      expanded={expandedId === o.id}
-                      onToggle={() => setExpandedId(expandedId === o.id ? null : o.id)}
-                      onPdf={downloadPdf}
-                      onEmail={sendEmail}
-                      onStatusChange={updatePoStatus}
-                      pdfLoadingId={pdfLoadingId}
-                      emailLoadingId={emailLoadingId}
-                    />
-                  ))
-                )}
-              </TableBody>
-            </ResponsiveTable>
-          </Box>
-
-          <Typography variant="h6" sx={{ mb: 1 }}>
-            Facturas Proveedor
-          </Typography>
-          <ResponsiveTable minWidth={640} size="small" paperSx={{ borderRadius: 3 }}>
-            <TableHead>
-              <TableRow>
-                <TableCell>Número</TableCell>
-                <TableCell>Proveedor</TableCell>
-                <TableCell>Monto</TableCell>
-                <TableCell>Estado</TableCell>
-                <TableCell>Acciones</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-                {invoices.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} align="center" sx={{ py: 3 }}>
-                      <Typography color="text.secondary">No hay facturas de proveedor</Typography>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  invoices.map((i) => (
-                    <TableRow key={i.id}>
-                      <TableCell>{i.invoiceNumber}</TableCell>
-                      <TableCell>{i.supplier?.name}</TableCell>
-                      <TableCell>{formatCurrency(Number(i.amount), config.currency)}</TableCell>
-                      <TableCell>
-                        <Chip
-                          size="small"
-                          label={formatSupplierInvoiceStatus(i.status)}
-                          variant="outlined"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Stack direction="row" spacing={1}>
-                          <LabeledSelect
-                            label="Estado"
-                            value={i.status}
-                            size="small"
-                            sx={{ minWidth: 130 }}
-                            onChange={(e) =>
-                              updateInvoiceStatus(i.id, e.target.value as string)
-                            }
-                          >
-                            {INV_STATUS_OPTIONS.map((s) => (
-                              <MenuItem key={s} value={s}>
-                                {formatSupplierInvoiceStatus(s)}
-                              </MenuItem>
-                            ))}
-                          </LabeledSelect>
-                        </Stack>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-          </ResponsiveTable>
-        </>
+      <AdminPageHeader
+        title="Pedidos a Proveedor"
+        actions={
+          <>
+            <ExportButton endpoint="/admin/exports/supplier-orders" label="Exportar PO" market={market} />
+            <ExportButton
+              endpoint="/admin/exports/supplier-invoices"
+              label="Exportar facturas"
+              market={market}
+            />
+            <Button variant="contained" onClick={() => setCreateOpen(true)}>
+              Nuevo PO (manual)
+            </Button>
+            <Button variant="outlined" onClick={() => setInvoiceOpen(true)}>
+              Registrar factura
+            </Button>
+          </>
+        }
+      />
+      {clientOrderFilter && (
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Filtrado por pedido cliente ·{" "}
+          <Link href="/admin/pedidos-proveedor">Quitar filtro</Link>
+        </Typography>
       )}
+
+      <Box sx={{ mb: 3 }}>
+        <ResponsiveTable minWidth={800}>
+          <TableHead>
+            <TableRow>
+              <TableCell width={48} />
+              <TableCell>Número</TableCell>
+              <TableCell>Pedido cliente</TableCell>
+              <TableCell>Proveedor</TableCell>
+              <TableCell>Estado</TableCell>
+              <TableCell>Total coste</TableCell>
+              <TableCell>Fecha</TableCell>
+              <TableCell>Acciones</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {loading ? (
+              <TableLoadingRow colSpan={8} />
+            ) : filteredOrders.length === 0 ? (
+              <TableEmptyRow colSpan={8} message="No hay pedidos a proveedor" />
+            ) : (
+              filteredOrders.map((o) => (
+                <OrderRow
+                  key={o.id}
+                  order={o}
+                  currency={config.currency}
+                  expanded={expandedId === o.id}
+                  onToggle={() => setExpandedId(expandedId === o.id ? null : o.id)}
+                  onPdf={downloadPdf}
+                  onEmail={sendEmail}
+                  onStatusChange={updatePoStatus}
+                  pdfLoadingId={pdfLoadingId}
+                  emailLoadingId={emailLoadingId}
+                />
+              ))
+            )}
+          </TableBody>
+        </ResponsiveTable>
+      </Box>
+
+      <Typography variant="h6" sx={{ mb: 1 }}>
+        Facturas Proveedor
+      </Typography>
+      <ResponsiveTable minWidth={640} size="small">
+        <TableHead>
+          <TableRow>
+            <TableCell>Número</TableCell>
+            <TableCell>Proveedor</TableCell>
+            <TableCell>Monto</TableCell>
+            <TableCell>Estado</TableCell>
+            <TableCell>Acciones</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {loading ? (
+            <TableLoadingRow colSpan={5} />
+          ) : invoices.length === 0 ? (
+            <TableEmptyRow colSpan={5} message="No hay facturas de proveedor" />
+          ) : (
+            invoices.map((i) => (
+              <TableRow key={i.id}>
+                <TableCell>{i.invoiceNumber}</TableCell>
+                <TableCell>{i.supplier?.name}</TableCell>
+                <TableCell>{formatCurrency(Number(i.amount), config.currency)}</TableCell>
+                <TableCell>
+                  <Chip
+                    size="small"
+                    label={formatSupplierInvoiceStatus(i.status)}
+                    variant="outlined"
+                  />
+                </TableCell>
+                <TableCell>
+                  <Stack direction="row" spacing={1}>
+                    <LabeledSelect
+                      label="Estado"
+                      value={i.status}
+                      size="small"
+                      sx={{ minWidth: 130 }}
+                      onChange={(e) =>
+                        updateInvoiceStatus(i.id, e.target.value as string)
+                      }
+                    >
+                      {INV_STATUS_OPTIONS.map((s) => (
+                        <MenuItem key={s} value={s}>
+                          {formatSupplierInvoiceStatus(s)}
+                        </MenuItem>
+                      ))}
+                    </LabeledSelect>
+                  </Stack>
+                </TableCell>
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </ResponsiveTable>
 
       <Dialog open={createOpen} onClose={() => !saving && setCreateOpen(false)}>
         <DialogTitle>Crear pedido proveedor (manual)</DialogTitle>

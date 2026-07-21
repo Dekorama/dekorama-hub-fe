@@ -30,7 +30,8 @@ import { useAdminMarket } from "@/features/admin/context/AdminMarketContext";
 import { adminApiUrl } from "@/features/admin/utils/adminApi";
 import { readApiError } from "@/features/admin/utils/readApiError";
 import { LabeledSelect } from "@/shared/components/LabeledSelect";
-import { PageToolbar, ResponsiveTable } from "@/shared/ui";
+import { AdminPageHeader } from "@/features/admin/components/AdminPageHeader";
+import { PageToolbar, ResponsiveTable, TableEmptyRow, TableLoadingRow } from "@/shared/ui";
 
 type PricingMode = "neto" | "pvp";
 type FinishType = "decorado" | "pieza_lisa";
@@ -646,71 +647,70 @@ export function AdminProductsPage() {
 
   return (
     <>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4">Catálogo de Productos</Typography>
-        <Stack direction="row" spacing={1}>
-          <Button variant="outlined" onClick={() => { setWizardOpen(true); setWizardStep(0); }}>
-            Asistente de alta
-          </Button>
-          <Button variant="contained" startIcon={<Add />} onClick={openCreateDialog}>
-            Nuevo Producto
-          </Button>
-        </Stack>
-      </Stack>
+      <AdminPageHeader
+        title="Catálogo de Productos"
+        actions={
+          <>
+            <Button variant="outlined" onClick={() => { setWizardOpen(true); setWizardStep(0); }}>
+              Asistente de alta
+            </Button>
+            <Button variant="contained" startIcon={<Add />} onClick={openCreateDialog}>
+              Nuevo Producto
+            </Button>
+          </>
+        }
+      />
 
-      {/* Filters */}
-      <Paper sx={{ p: 2, mb: 3 }}>
-        <PageToolbar>
-          <TextField
-            label="Buscar por nombre o SKU"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            sx={{ minWidth: 250 }}
-          />
+      <PageToolbar sx={{ mb: 2 }}>
+        <TextField
+          label="Buscar por nombre o SKU"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          sx={{ minWidth: 250 }}
+        />
+        <LabeledSelect
+          label="Familia"
+          value={filterFamily}
+          emptyLabel="Todas"
+          onChange={(e) => {
+            setFilterFamily(String(e.target.value));
+            setFilterSubfamily("");
+          }}
+          formControlProps={{ sx: { minWidth: 150 } }}
+        >
+          {families.map((f) => (
+            <MenuItem key={f.code} value={f.code}>
+              {f.name}
+            </MenuItem>
+          ))}
+        </LabeledSelect>
+        {filterFamily && (
           <LabeledSelect
-            label="Familia"
-            value={filterFamily}
-            emptyLabel="Todas"
-            onChange={(e) => {
-              setFilterFamily(String(e.target.value));
-              setFilterSubfamily("");
-            }}
+            label="Proveedor"
+            value={filterSubfamily}
+            emptyLabel={loadingSubfamilies ? "Cargando…" : "Todos"}
+            onChange={(e) => setFilterSubfamily(String(e.target.value))}
             formControlProps={{ sx: { minWidth: 150 } }}
           >
-            {families.map((f) => (
-              <MenuItem key={f.code} value={f.code}>
-                {f.name}
-              </MenuItem>
-            ))}
+            {subfamilies
+              .filter((sf) => sf.familyCode === filterFamily)
+              .map((sf) => (
+                <MenuItem key={sf.code} value={sf.code}>
+                  {sf.name}
+                </MenuItem>
+              ))}
           </LabeledSelect>
-          {filterFamily && (
-            <LabeledSelect
-              label="Proveedor"
-              value={filterSubfamily}
-              emptyLabel={loadingSubfamilies ? "Cargando…" : "Todos"}
-              onChange={(e) => setFilterSubfamily(String(e.target.value))}
-              formControlProps={{ sx: { minWidth: 150 } }}
-            >
-              {subfamilies
-                .filter((sf) => sf.familyCode === filterFamily)
-                .map((sf) => (
-                  <MenuItem key={sf.code} value={sf.code}>
-                    {sf.name}
-                  </MenuItem>
-                ))}
-            </LabeledSelect>
-          )}
-          <FormControlLabel
-            control={
-              <Switch
-                checked={showOnlyActive}
-                onChange={(e) => setShowOnlyActive(e.target.checked)}
-              />
-            }
-            label="Solo activos"
-          />
-        </PageToolbar>
-      </Paper>
+        )}
+        <FormControlLabel
+          control={
+            <Switch
+              checked={showOnlyActive}
+              onChange={(e) => setShowOnlyActive(e.target.checked)}
+            />
+          }
+          label="Solo activos"
+        />
+      </PageToolbar>
 
       {loadError && (
         <Paper sx={{ p: 2, mb: 2, bgcolor: "error.light", color: "error.contrastText" }}>
@@ -718,71 +718,69 @@ export function AdminProductsPage() {
         </Paper>
       )}
 
-      {/* Products Table */}
-      {loading ? (
-        <Typography>Cargando...</Typography>
-      ) : filteredProducts.length === 0 ? (
-        <Paper sx={{ p: 4, textAlign: "center" }}>
-          <Typography color="text.secondary">
-            No hay productos que coincidan con los filtros
-          </Typography>
-        </Paper>
-      ) : (
-        <ResponsiveTable minWidth={800} paperSx={{ borderRadius: 3 }}>
-          <TableHead>
-              <TableRow>
-                <TableCell>SKU</TableCell>
-                <TableCell>Nombre</TableCell>
-                <TableCell>Familia</TableCell>
-                <TableCell>Proveedor</TableCell>
-                <TableCell align="right">PVP</TableCell>
-                {!isSpainMarket && <TableCell align="right">Stock</TableCell>}
-                <TableCell>Estado</TableCell>
-                <TableCell align="right">Acciones</TableCell>
+      <ResponsiveTable minWidth={800}>
+        <TableHead>
+          <TableRow>
+            <TableCell>SKU</TableCell>
+            <TableCell>Nombre</TableCell>
+            <TableCell>Familia</TableCell>
+            <TableCell>Proveedor</TableCell>
+            <TableCell align="right">PVP</TableCell>
+            {!isSpainMarket && <TableCell align="right">Stock</TableCell>}
+            <TableCell>Estado</TableCell>
+            <TableCell align="right">Acciones</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {loading ? (
+            <TableLoadingRow colSpan={isSpainMarket ? 7 : 8} />
+          ) : filteredProducts.length === 0 ? (
+            <TableEmptyRow
+              colSpan={isSpainMarket ? 7 : 8}
+              message="No hay productos que coincidan con los filtros"
+            />
+          ) : (
+            filteredProducts.map((product) => (
+              <TableRow key={product.id}>
+                <TableCell>{product.sku}</TableCell>
+                <TableCell>{product.name}</TableCell>
+                <TableCell>{product.familyName}</TableCell>
+                <TableCell>{product.subfamilyName}</TableCell>
+                <TableCell align="right">${product.pvpPrice.toFixed(2)}</TableCell>
+                {!isSpainMarket && (
+                  <TableCell align="right">{product.stock}</TableCell>
+                )}
+                <TableCell>
+                  <Chip
+                    label={product.isActive ? "Activo" : "Inactivo"}
+                    color={product.isActive ? "success" : "default"}
+                    size="small"
+                  />
+                </TableCell>
+                <TableCell align="right">
+                  <IconButton
+                    size="small"
+                    onClick={() => openEditDialog(product)}
+                    color="primary"
+                  >
+                    <Edit fontSize="small" />
+                  </IconButton>
+                  <IconButton
+                    size="small"
+                    onClick={() => {
+                      setProductToDelete(product);
+                      setDeleteDialogOpen(true);
+                    }}
+                    color="error"
+                  >
+                    <Delete fontSize="small" />
+                  </IconButton>
+                </TableCell>
               </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredProducts.map((product) => (
-                <TableRow key={product.id}>
-                  <TableCell>{product.sku}</TableCell>
-                  <TableCell>{product.name}</TableCell>
-                  <TableCell>{product.familyName}</TableCell>
-                  <TableCell>{product.subfamilyName}</TableCell>
-                  <TableCell align="right">${product.pvpPrice.toFixed(2)}</TableCell>
-                  {!isSpainMarket && (
-                    <TableCell align="right">{product.stock}</TableCell>
-                  )}
-                  <TableCell>
-                    <Chip
-                      label={product.isActive ? "Activo" : "Inactivo"}
-                      color={product.isActive ? "success" : "default"}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell align="right">
-                    <IconButton
-                      size="small"
-                      onClick={() => openEditDialog(product)}
-                      color="primary"
-                    >
-                      <Edit fontSize="small" />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      onClick={() => {
-                        setProductToDelete(product);
-                        setDeleteDialogOpen(true);
-                      }}
-                      color="error"
-                    >
-                      <Delete fontSize="small" />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-        </ResponsiveTable>
-      )}
+            ))
+          )}
+        </TableBody>
+      </ResponsiveTable>
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>

@@ -15,7 +15,7 @@ Before any FE change, follow `dekorama-fe/AGENTS.md`.
 3. **Shared cross-domain** → `shared/components` or `shared/ui`.
 4. **Providers/theme** → `core/`.
 5. **Imports:** `@/features/...`, `@/shared/...`, `@/core/...`. Never invent `app/components`.
-6. **Tables/tabs/toolbars:** use `ResponsiveTable`, `ScrollableTabs`, `PageToolbar` from `@/shared/ui`.
+6. **Tables/tabs/toolbars:** use `ResponsiveTable`, `ScrollableTabs`, `PageToolbar`, `TableLoadingRow`, `TableEmptyRow` from `@/shared/ui`.
 7. **TypeScript:** no `any`. Prefer named exports for feature pages (`CartPage`, etc.).
 8. **Do not change URL paths** when moving code between folders.
 

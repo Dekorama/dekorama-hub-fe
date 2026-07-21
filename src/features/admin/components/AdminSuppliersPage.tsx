@@ -5,7 +5,6 @@ import {
   Box,
   Button,
   Checkbox,
-  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -33,7 +32,8 @@ import { useAppSnackbar } from "@/shared/hooks/useAppSnackbar";
 import { useAdminMarket } from "@/features/admin/context/AdminMarketContext";
 import { adminApiUrl } from "@/features/admin/utils/adminApi";
 import { readApiError } from "@/features/admin/utils/readApiError";
-import { ResponsiveTable } from "@/shared/ui";
+import { AdminPageHeader } from "@/features/admin/components/AdminPageHeader";
+import { ResponsiveTable, TableEmptyRow, TableLoadingRow } from "@/shared/ui";
 import {
   defaultSupplierDocumentType,
   getClientDocumentLabel,
@@ -318,106 +318,100 @@ export function AdminSuppliersPage() {
 
   return (
     <>
-      <Stack direction="row" justifyContent="space-between" sx={{ mb: 2 }}>
-        <Typography variant="h5">Proveedores</Typography>
-        <Button variant="contained" startIcon={<Add />} onClick={openCreate}>
-          Nuevo
-        </Button>
-      </Stack>
+      <AdminPageHeader
+        title="Proveedores"
+        actions={
+          <Button variant="contained" startIcon={<Add />} onClick={openCreate}>
+            Nuevo
+          </Button>
+        }
+      />
 
-      {loading ? (
-        <Box display="flex" justifyContent="center" py={6}>
-          <CircularProgress />
-        </Box>
-      ) : (
-        <ResponsiveTable minWidth={720} paperSx={{ borderRadius: 3 }}>
-          <TableHead>
-              <TableRow>
-                <TableCell>Prefijo</TableCell>
-                <TableCell>Nombre</TableCell>
-                <TableCell>Familias</TableCell>
-                <TableCell>Documento</TableCell>
-                <TableCell>Email</TableCell>
-                <TableCell>Teléfono</TableCell>
-                <TableCell>Cuenta</TableCell>
-                <TableCell>IVA</TableCell>
-                <TableCell>Activo</TableCell>
-                <TableCell>Acciones</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {suppliers.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={10} align="center" sx={{ py: 4 }}>
-                    <Typography color="text.secondary">No hay proveedores</Typography>
+      <ResponsiveTable minWidth={720}>
+        <TableHead>
+          <TableRow>
+            <TableCell>Prefijo</TableCell>
+            <TableCell>Nombre</TableCell>
+            <TableCell>Familias</TableCell>
+            <TableCell>Documento</TableCell>
+            <TableCell>Email</TableCell>
+            <TableCell>Teléfono</TableCell>
+            <TableCell>Cuenta</TableCell>
+            <TableCell>IVA</TableCell>
+            <TableCell>Activo</TableCell>
+            <TableCell>Acciones</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {loading ? (
+            <TableLoadingRow colSpan={10} />
+          ) : suppliers.length === 0 ? (
+            <TableEmptyRow colSpan={10} message="No hay proveedores" />
+          ) : (
+            suppliers.map((s) => {
+              const emails = allEmails(s);
+              const phones = allPhones(s);
+              const docLabel = s.documentType
+                ? getClientDocumentLabel(s.documentType)
+                : null;
+              return (
+                <TableRow key={s.id}>
+                  <TableCell>
+                    <Typography fontFamily="monospace" fontWeight={600}>
+                      {s.prefix ?? "—"}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>{s.name}</TableCell>
+                  <TableCell>
+                    {(s.familyCodes ?? []).length === 0
+                      ? "—"
+                      : (s.familyCodes ?? [])
+                          .map((c) => familyNameByCode.get(c) ?? c)
+                          .join(", ")}
+                  </TableCell>
+                  <TableCell>
+                    {s.documentNumber
+                      ? `${docLabel ?? "Doc"} ${s.documentNumber}`
+                      : "—"}
+                  </TableCell>
+                  <TableCell>
+                    {emails.length === 0
+                      ? "N/D"
+                      : emails.map((email) => (
+                          <Typography key={email} variant="body2" component="div">
+                            {email}
+                          </Typography>
+                        ))}
+                  </TableCell>
+                  <TableCell>
+                    {phones.length === 0
+                      ? "N/D"
+                      : phones.map((phone) => (
+                          <Typography key={phone} variant="body2" component="div">
+                            {phone}
+                          </Typography>
+                        ))}
+                  </TableCell>
+                  <TableCell>{s.accountNumber ?? "—"}</TableCell>
+                  <TableCell>
+                    {s.taxExempt
+                      ? "Exento"
+                      : s.taxRate != null
+                        ? `${Number(s.taxRate)}%`
+                        : "Mercado"}
+                  </TableCell>
+                  <TableCell>{s.isActive ? "Sí" : "No"}</TableCell>
+                  <TableCell>
+                    <IconButton onClick={() => openEdit(s)} aria-label="Editar">
+                      <Edit />
+                    </IconButton>
                   </TableCell>
                 </TableRow>
-              ) : (
-                suppliers.map((s) => {
-                  const emails = allEmails(s);
-                  const phones = allPhones(s);
-                  const docLabel = s.documentType
-                    ? getClientDocumentLabel(s.documentType)
-                    : null;
-                  return (
-                    <TableRow key={s.id}>
-                      <TableCell>
-                        <Typography fontFamily="monospace" fontWeight={600}>
-                          {s.prefix ?? "—"}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>{s.name}</TableCell>
-                      <TableCell>
-                        {(s.familyCodes ?? []).length === 0
-                          ? "—"
-                          : (s.familyCodes ?? [])
-                              .map((c) => familyNameByCode.get(c) ?? c)
-                              .join(", ")}
-                      </TableCell>
-                      <TableCell>
-                        {s.documentNumber
-                          ? `${docLabel ?? "Doc"} ${s.documentNumber}`
-                          : "—"}
-                      </TableCell>
-                      <TableCell>
-                        {emails.length === 0
-                          ? "N/D"
-                          : emails.map((email) => (
-                              <Typography key={email} variant="body2" component="div">
-                                {email}
-                              </Typography>
-                            ))}
-                      </TableCell>
-                      <TableCell>
-                        {phones.length === 0
-                          ? "N/D"
-                          : phones.map((phone) => (
-                              <Typography key={phone} variant="body2" component="div">
-                                {phone}
-                              </Typography>
-                            ))}
-                      </TableCell>
-                      <TableCell>{s.accountNumber ?? "—"}</TableCell>
-                      <TableCell>
-                        {s.taxExempt
-                          ? "Exento"
-                          : s.taxRate != null
-                            ? `${Number(s.taxRate)}%`
-                            : "Mercado"}
-                      </TableCell>
-                      <TableCell>{s.isActive ? "Sí" : "No"}</TableCell>
-                      <TableCell>
-                        <IconButton onClick={() => openEdit(s)} aria-label="Editar">
-                          <Edit />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-        </ResponsiveTable>
-      )}
+              );
+            })
+          )}
+        </TableBody>
+      </ResponsiveTable>
 
       <Dialog open={dialogOpen} onClose={() => !saving && setDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>{editing ? "Editar proveedor" : "Nuevo proveedor"}</DialogTitle>

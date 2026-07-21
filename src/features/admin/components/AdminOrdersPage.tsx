@@ -6,7 +6,6 @@ import {
   Box,
   Button,
   Chip,
-  CircularProgress,
   Collapse,
   Dialog,
   DialogActions,
@@ -24,6 +23,7 @@ import {
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import { ExportButton } from "@/features/admin/components/AdminNav";
+import { AdminPageHeader } from "@/features/admin/components/AdminPageHeader";
 import { SupplierOrderPreviewDialog } from "@/features/admin/components/SupplierOrderPreviewDialog";
 import { useCurrentUser, API } from "@/features/auth/hooks/useCurrentUser";
 import { useAppSnackbar } from "@/shared/hooks/useAppSnackbar";
@@ -35,7 +35,7 @@ import {
 import { useAdminMarket } from "@/features/admin/context/AdminMarketContext";
 import { adminApiUrl } from "@/features/admin/utils/adminApi";
 import { readApiError } from "@/features/admin/utils/readApiError";
-import { ResponsiveTable } from "@/shared/ui";
+import { ResponsiveTable, TableEmptyRow, TableLoadingRow } from "@/shared/ui";
 
 interface OrderLineItem {
   id: string;
@@ -232,91 +232,85 @@ export function AdminOrdersPage() {
 
   return (
     <>
-      <Stack direction="row" justifyContent="space-between" sx={{ mb: 2 }}>
-        <Typography variant="h5">Pedidos Cliente</Typography>
-        <ExportButton endpoint="/admin/exports/orders" label="Exportar Excel" market={market} />
-      </Stack>
+      <AdminPageHeader
+        title="Pedidos Cliente"
+        actions={
+          <ExportButton endpoint="/admin/exports/orders" label="Exportar Excel" market={market} />
+        }
+      />
 
-      {loading ? (
-        <Box display="flex" justifyContent="center" py={6}>
-          <CircularProgress />
-        </Box>
-      ) : (
-        <ResponsiveTable minWidth={720}>
-          <TableHead>
-              <TableRow>
-                <TableCell width={48} />
-                <TableCell>Número</TableCell>
-                <TableCell>Cliente</TableCell>
-                <TableCell>Estado</TableCell>
-                <TableCell>Total</TableCell>
-                <TableCell>POs</TableCell>
-                <TableCell>Fecha</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {orders.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                    <Typography color="text.secondary">No hay pedidos</Typography>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                orders.map((o) => {
-                  const pos = posForOrder(o.id);
-                  const pending = pos.filter(
-                    (p) => p.status === "draft" || p.status === "sent",
-                  ).length;
-                  const expanded = expandedId === o.id;
+      <ResponsiveTable minWidth={720}>
+        <TableHead>
+          <TableRow>
+            <TableCell width={48} />
+            <TableCell>Número</TableCell>
+            <TableCell>Cliente</TableCell>
+            <TableCell>Estado</TableCell>
+            <TableCell>Total</TableCell>
+            <TableCell>POs</TableCell>
+            <TableCell>Fecha</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {loading ? (
+            <TableLoadingRow colSpan={7} />
+          ) : orders.length === 0 ? (
+            <TableEmptyRow colSpan={7} message="No hay pedidos" />
+          ) : (
+            orders.map((o) => {
+              const pos = posForOrder(o.id);
+              const pending = pos.filter(
+                (p) => p.status === "draft" || p.status === "sent",
+              ).length;
+              const expanded = expandedId === o.id;
 
-                  return (
-                    <Fragment key={o.id}>
-                      <TableRow hover>
-                        <TableCell>
-                          <IconButton
-                            size="small"
-                            onClick={() => setExpandedId(expanded ? null : o.id)}
-                            aria-label="Ver detalle"
-                          >
-                            {expanded ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
-                          </IconButton>
-                        </TableCell>
-                        <TableCell>{o.orderNumber}</TableCell>
-                        <TableCell>{o.client?.name ?? o.client?.email}</TableCell>
-                        <TableCell>{formatClientOrderStatus(o.status)}</TableCell>
-                        <TableCell>{formatOrderTotal(o.total, o.lineItems)}</TableCell>
-                        <TableCell>
-                          {pos.length === 0 ? (
-                            "—"
-                          ) : pending > 0 ? (
-                            <Chip size="small" color="warning" label={`${pending} pend.`} />
-                          ) : (
-                            <Chip size="small" label={`${pos.length} PO`} variant="outlined" />
-                          )}
-                        </TableCell>
-                        <TableCell>{new Date(o.createdAt).toLocaleDateString("es-ES")}</TableCell>
-                      </TableRow>
-                      <TableRow key={`${o.id}-detail`}>
-                        <TableCell colSpan={7} sx={{ py: 0, borderBottom: expanded ? undefined : 0 }}>
-                          <Collapse in={expanded} timeout="auto" unmountOnExit>
-                            <Box sx={{ py: 2, px: 1 }}>
-                              <OrderDetailRow
-                                order={o}
-                                supplierOrders={pos}
-                                onGeneratePos={setPreviewOrderId}
-                                onInvoice={setInvoiceDialog}
-                              />
-                            </Box>
-                          </Collapse>
-                        </TableCell>
-                      </TableRow>
-                    </Fragment>
-                  );
-                })
-              )}
-            </TableBody>
-        </ResponsiveTable>
-      )}
+              return (
+                <Fragment key={o.id}>
+                  <TableRow hover>
+                    <TableCell>
+                      <IconButton
+                        size="small"
+                        onClick={() => setExpandedId(expanded ? null : o.id)}
+                        aria-label="Ver detalle"
+                      >
+                        {expanded ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+                      </IconButton>
+                    </TableCell>
+                    <TableCell>{o.orderNumber}</TableCell>
+                    <TableCell>{o.client?.name ?? o.client?.email}</TableCell>
+                    <TableCell>{formatClientOrderStatus(o.status)}</TableCell>
+                    <TableCell>{formatOrderTotal(o.total, o.lineItems)}</TableCell>
+                    <TableCell>
+                      {pos.length === 0 ? (
+                        "—"
+                      ) : pending > 0 ? (
+                        <Chip size="small" color="warning" label={`${pending} pend.`} />
+                      ) : (
+                        <Chip size="small" label={`${pos.length} PO`} variant="outlined" />
+                      )}
+                    </TableCell>
+                    <TableCell>{new Date(o.createdAt).toLocaleDateString("es-ES")}</TableCell>
+                  </TableRow>
+                  <TableRow key={`${o.id}-detail`}>
+                    <TableCell colSpan={7} sx={{ py: 0, borderBottom: expanded ? undefined : 0 }}>
+                      <Collapse in={expanded} timeout="auto" unmountOnExit>
+                        <Box sx={{ py: 2, px: 1 }}>
+                          <OrderDetailRow
+                            order={o}
+                            supplierOrders={pos}
+                            onGeneratePos={setPreviewOrderId}
+                            onInvoice={setInvoiceDialog}
+                          />
+                        </Box>
+                      </Collapse>
+                    </TableCell>
+                  </TableRow>
+                </Fragment>
+              );
+            })
+          )}
+        </TableBody>
+      </ResponsiveTable>
 
       <Dialog open={!!invoiceDialog} onClose={() => setInvoiceDialog(null)}>
         <DialogTitle>Facturar pedido</DialogTitle>
