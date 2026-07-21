@@ -49,6 +49,8 @@ interface Product {
   profitMargin: number;
   pvpPrice: number;
   unit: string;
+  piecesPerBox: number | null;
+  unitPerPiece: number | null;
   stock: number;
   description: string | null;
   isActive: boolean;
@@ -95,7 +97,26 @@ function normalizeProduct(raw: Product): Product {
     profitMargin: Number(raw.profitMargin),
     pvpPrice: Number(raw.pvpPrice),
     stock: Number(raw.stock),
+    piecesPerBox:
+      raw.piecesPerBox === null || raw.piecesPerBox === undefined
+        ? null
+        : Number(raw.piecesPerBox),
+    unitPerPiece:
+      raw.unitPerPiece === null || raw.unitPerPiece === undefined
+        ? null
+        : Number(raw.unitPerPiece),
   };
+}
+
+const MAX_PROFIT_MARGIN = 999;
+
+function isM2Unit(unit: string): boolean {
+  const normalized = unit
+    .trim()
+    .toLowerCase()
+    .replace("²", "2")
+    .replace(/\s+/g, "");
+  return normalized === "m2";
 }
 
 export function AdminProductsPage() {
@@ -130,6 +151,8 @@ export function AdminProductsPage() {
   const [formProfitMargin, setFormProfitMargin] = useState<number>(40);
   const [formPvpPrice, setFormPvpPrice] = useState<number>(0);
   const [formUnit, setFormUnit] = useState("unidad");
+  const [formPiecesPerBox, setFormPiecesPerBox] = useState<number>(0);
+  const [formUnitPerPiece, setFormUnitPerPiece] = useState<number>(0);
   const [formStock, setFormStock] = useState<number>(0);
   const [formDescription, setFormDescription] = useState("");
   const [formIsActive, setFormIsActive] = useState(true);
@@ -315,6 +338,8 @@ export function AdminProductsPage() {
     setFormProfitMargin(Number(product.profitMargin) || 0);
     setFormPvpPrice(Number(product.pvpPrice) || 0);
     setFormUnit(product.unit);
+    setFormPiecesPerBox(Number(product.piecesPerBox) || 0);
+    setFormUnitPerPiece(Number(product.unitPerPiece) || 0);
     setFormStock(Number(product.stock) || 0);
     setFormDescription(product.description || "");
     setFormIsActive(product.isActive);
@@ -332,6 +357,8 @@ export function AdminProductsPage() {
     setFormProfitMargin(40);
     setFormPvpPrice(0);
     setFormUnit("unidad");
+    setFormPiecesPerBox(0);
+    setFormUnitPerPiece(0);
     setFormStock(0);
     setFormDescription("");
     setFormIsActive(true);
@@ -356,12 +383,16 @@ export function AdminProductsPage() {
       showWarning("Indica el PVP");
       return;
     }
-    if (formProfitMargin < 0 || formProfitMargin > 100) {
-      showWarning("Indica el margen de ganancia (0–100%)");
+    if (formProfitMargin < 0 || formProfitMargin > MAX_PROFIT_MARGIN) {
+      showWarning(`Indica el margen de ganancia (0–${MAX_PROFIT_MARGIN}%)`);
       return;
     }
-    if (!formSupplierId || !formSupplierFactoryCode.trim()) {
-      showWarning("Indica proveedor y código de fábrica (necesario para pedidos a proveedor)");
+    if (!formSupplierId) {
+      showWarning("Indica el proveedor");
+      return;
+    }
+    if (isM2Unit(formUnit) && (formPiecesPerBox < 1 || formUnitPerPiece <= 0)) {
+      showWarning("Unidad m2: indica piezas por caja y cobertura por pieza");
       return;
     }
 
@@ -372,13 +403,17 @@ export function AdminProductsPage() {
         name: formName,
         family: formFamily,
         supplierId: formSupplierId,
-        factoryCode: formSupplierFactoryCode.trim(),
+        ...(formSupplierFactoryCode.trim()
+          ? { factoryCode: formSupplierFactoryCode.trim() }
+          : {}),
         pricingMode: formPricingMode,
         finishType: formFamily === "REV" ? formFinishType : null,
         factoryCost: formPricingMode === "neto" ? formFactoryCost : undefined,
         profitMargin: formProfitMargin,
         pvpPrice: formPricingMode === "pvp" ? formPvpPrice : undefined,
         unit: formUnit,
+        piecesPerBox: isM2Unit(formUnit) ? formPiecesPerBox : null,
+        unitPerPiece: isM2Unit(formUnit) ? formUnitPerPiece : null,
         stock: isSpainMarket ? 0 : formStock,
         description: formDescription || undefined,
         isActive: formIsActive,
@@ -473,8 +508,16 @@ export function AdminProductsPage() {
         setWizSupplierId(data.id);
         setWizardStep(2);
       } else if (wizardStep === 2) {
-        if (!wizFactoryCode.trim()) {
-          showError("Código de fábrica obligatorio");
+        if (!formName.trim()) {
+          showError("Nombre del artículo obligatorio");
+          return;
+        }
+        if (formProfitMargin < 0 || formProfitMargin > MAX_PROFIT_MARGIN) {
+          showError(`Margen de ganancia inválido (0–${MAX_PROFIT_MARGIN}%)`);
+          return;
+        }
+        if (isM2Unit(formUnit) && (formPiecesPerBox < 1 || formUnitPerPiece <= 0)) {
+          showError("Unidad m2: indica piezas por caja y cobertura por pieza");
           return;
         }
         const familyCode = wizFamily.code || formFamily;
@@ -486,13 +529,17 @@ export function AdminProductsPage() {
             name: formName,
             family: familyCode,
             supplierId: wizSupplierId,
-            factoryCode: wizFactoryCode.trim(),
+            ...(wizFactoryCode.trim()
+              ? { factoryCode: wizFactoryCode.trim() }
+              : {}),
             pricingMode: formPricingMode,
             finishType: familyCode === "REV" ? formFinishType || undefined : undefined,
             factoryCost: formPricingMode === "neto" ? formFactoryCost : undefined,
             profitMargin: formProfitMargin,
             pvpPrice: formPricingMode === "pvp" ? formPvpPrice : undefined,
             unit: formUnit,
+            piecesPerBox: isM2Unit(formUnit) ? formPiecesPerBox : null,
+            unitPerPiece: isM2Unit(formUnit) ? formUnitPerPiece : null,
             stock: isSpainMarket ? 0 : formStock,
             description: formDescription,
             market,
@@ -570,6 +617,11 @@ export function AdminProductsPage() {
     supplierOptions.find((s) => s.id === formSupplierId) ??
     suppliers.find((s) => s.id === formSupplierId);
   const skuPreviewPrefix = selectedSupplier?.prefix?.toUpperCase() ?? null;
+  const formIsM2 = isM2Unit(formUnit);
+  const calculatedUnitPerBox =
+    formIsM2 && formPiecesPerBox > 0 && formUnitPerPiece > 0
+      ? formPiecesPerBox * formUnitPerPiece
+      : 0;
 
   const saveDisabled =
     saving ||
@@ -579,10 +631,18 @@ export function AdminProductsPage() {
     (formPricingMode === "neto" && formFactoryCost <= 0) ||
     (formPricingMode === "pvp" && formPvpPrice <= 0) ||
     formProfitMargin < 0 ||
-    formProfitMargin > 100 ||
+    formProfitMargin > MAX_PROFIT_MARGIN ||
     !formSupplierId ||
-    !formSupplierFactoryCode.trim() ||
-    !selectedSupplier?.prefix;
+    !selectedSupplier?.prefix ||
+    (formIsM2 && (formPiecesPerBox < 1 || formUnitPerPiece <= 0));
+
+  const saveDisabledHint = !formName.trim()
+    ? "Falta Nombre"
+    : formProfitMargin > MAX_PROFIT_MARGIN
+      ? `Margen máximo ${MAX_PROFIT_MARGIN}%`
+      : formIsM2 && (formPiecesPerBox < 1 || formUnitPerPiece <= 0)
+        ? "m2: piezas/caja y cobertura/pieza"
+        : null;
 
   return (
     <>
@@ -806,9 +866,8 @@ export function AdminProductsPage() {
               label="Código de fábrica"
               value={formSupplierFactoryCode}
               onChange={(e) => setFormSupplierFactoryCode(e.target.value)}
-              required
               fullWidth
-              helperText="Referencia del proveedor. Agrupa este artículo en el pedido a ese proveedor."
+              helperText="Opcional. Si vacío, se usa el SKU (ej. NDS-00001) en pedidos."
             />
             <Divider sx={{ my: 1 }} />
             {formFamily === "REV" && (
@@ -856,7 +915,7 @@ export function AdminProductsPage() {
                   }
                   required
                   fullWidth
-                  inputProps={{ min: 0, max: 100 }}
+                  inputProps={{ min: 0, max: MAX_PROFIT_MARGIN }}
                 />
                 <Paper sx={{ p: 2, bgcolor: "grey.100" }}>
                   <Typography variant="body2" color="text.secondary">
@@ -884,7 +943,7 @@ export function AdminProductsPage() {
                   }
                   required
                   fullWidth
-                  inputProps={{ min: 0, max: 100 }}
+                  inputProps={{ min: 0, max: MAX_PROFIT_MARGIN }}
                 />
                 <Paper sx={{ p: 2, bgcolor: "grey.100" }}>
                   <Typography variant="body2" color="text.secondary">
@@ -899,7 +958,46 @@ export function AdminProductsPage() {
               value={formUnit}
               onChange={(e) => setFormUnit(e.target.value)}
               fullWidth
+              helperText='Ej. "unidad", "m2"'
             />
+            {formIsM2 && (
+              <>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Empaque m²
+                </Typography>
+                <TextField
+                  label="Piezas por caja"
+                  type="number"
+                  value={formPiecesPerBox || ""}
+                  onChange={(e) =>
+                    setFormPiecesPerBox(parseInt(e.target.value, 10) || 0)
+                  }
+                  required
+                  fullWidth
+                  inputProps={{ min: 1, step: 1 }}
+                />
+                <TextField
+                  label="Cobertura por pieza (m²)"
+                  type="number"
+                  value={formUnitPerPiece || ""}
+                  onChange={(e) =>
+                    setFormUnitPerPiece(parseFloat(e.target.value) || 0)
+                  }
+                  required
+                  fullWidth
+                  inputProps={{ min: 0, step: 0.0001 }}
+                  helperText="Cuánto abarca una pieza en m²"
+                />
+                <Paper sx={{ p: 2, bgcolor: "grey.100" }}>
+                  <Typography variant="body2" color="text.secondary">
+                    m² por caja:{" "}
+                    {calculatedUnitPerBox > 0
+                      ? calculatedUnitPerBox.toFixed(4)
+                      : "—"}
+                  </Typography>
+                </Paper>
+              </>
+            )}
             {!isSpainMarket && (
               <TextField
                 label="Stock inicial"
@@ -942,13 +1040,20 @@ export function AdminProductsPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialogOpen(false)}>Cancelar</Button>
-          <Button
-            variant="contained"
-            onClick={handleSaveProduct}
-            disabled={saveDisabled}
-          >
-            {saving ? "Guardando..." : "Guardar"}
-          </Button>
+          <Stack alignItems="flex-end" spacing={0.5}>
+            {saveDisabled && saveDisabledHint && (
+              <Typography variant="caption" color="text.secondary" sx={{ pr: 1 }}>
+                {saveDisabledHint}
+              </Typography>
+            )}
+            <Button
+              variant="contained"
+              onClick={handleSaveProduct}
+              disabled={saveDisabled}
+            >
+              {saving ? "Guardando..." : "Guardar"}
+            </Button>
+          </Stack>
         </DialogActions>
       </Dialog>
 
@@ -978,7 +1083,7 @@ export function AdminProductsPage() {
 
       <Dialog open={wizardOpen} onClose={() => setWizardOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>
-          Asistente: {["Familia", "Proveedor", "Artículo + Código fábrica", "Completado"][wizardStep]}
+          Asistente: {["Familia", "Proveedor", "Artículo", "Completado"][wizardStep]}
         </DialogTitle>
         <DialogContent>
           {wizardStep === 0 && (
@@ -1049,8 +1154,20 @@ export function AdminProductsPage() {
               <Typography variant="body2" color="text.secondary" fontFamily="monospace">
                 SKU: {wizSupplier.prefix.toUpperCase() || "???"}-#####
               </Typography>
-              <TextField label="Nombre artículo" value={formName} onChange={(e) => setFormName(e.target.value)} fullWidth />
-              <TextField label="Código fábrica" value={wizFactoryCode} onChange={(e) => setWizFactoryCode(e.target.value)} fullWidth />
+              <TextField
+                label="Nombre artículo"
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
+                required
+                fullWidth
+              />
+              <TextField
+                label="Código fábrica"
+                value={wizFactoryCode}
+                onChange={(e) => setWizFactoryCode(e.target.value)}
+                fullWidth
+                helperText="Opcional. Si vacío, se usa el SKU en pedidos."
+              />
               {(wizFamily.code || formFamily) === "REV" && (
                 <LabeledSelect
                   label="Tipo revestimiento"
@@ -1077,7 +1194,7 @@ export function AdminProductsPage() {
               {formPricingMode === "neto" ? (
                 <>
                   <TextField label="Coste / Neto" type="number" value={formFactoryCost} onChange={(e) => setFormFactoryCost(parseFloat(e.target.value) || 0)} fullWidth />
-                  <TextField label="Margen %" type="number" value={formProfitMargin} onChange={(e) => setFormProfitMargin(parseFloat(e.target.value) || 0)} fullWidth inputProps={{ min: 0, max: 100 }} />
+                  <TextField label="Margen %" type="number" value={formProfitMargin} onChange={(e) => setFormProfitMargin(parseFloat(e.target.value) || 0)} fullWidth inputProps={{ min: 0, max: MAX_PROFIT_MARGIN }} />
                   <Typography variant="body2" color="text.secondary">
                     PVP calculado: ${calculatedPVP.toFixed(2)}
                   </Typography>
@@ -1085,9 +1202,48 @@ export function AdminProductsPage() {
               ) : (
                 <>
                   <TextField label="PVP" type="number" value={formPvpPrice} onChange={(e) => setFormPvpPrice(parseFloat(e.target.value) || 0)} fullWidth />
-                  <TextField label="Margen %" type="number" value={formProfitMargin} onChange={(e) => setFormProfitMargin(parseFloat(e.target.value) || 0)} fullWidth inputProps={{ min: 0, max: 100 }} />
+                  <TextField label="Margen %" type="number" value={formProfitMargin} onChange={(e) => setFormProfitMargin(parseFloat(e.target.value) || 0)} fullWidth inputProps={{ min: 0, max: MAX_PROFIT_MARGIN }} />
                   <Typography variant="body2" color="text.secondary">
                     Costo de compra calculado: ${calculatedFactoryCost.toFixed(2)}
+                  </Typography>
+                </>
+              )}
+              <TextField
+                label="Unidad"
+                value={formUnit}
+                onChange={(e) => setFormUnit(e.target.value)}
+                fullWidth
+                helperText='Ej. "unidad", "m2"'
+              />
+              {formIsM2 && (
+                <>
+                  <TextField
+                    label="Piezas por caja"
+                    type="number"
+                    value={formPiecesPerBox || ""}
+                    onChange={(e) =>
+                      setFormPiecesPerBox(parseInt(e.target.value, 10) || 0)
+                    }
+                    required
+                    fullWidth
+                    inputProps={{ min: 1, step: 1 }}
+                  />
+                  <TextField
+                    label="Cobertura por pieza (m²)"
+                    type="number"
+                    value={formUnitPerPiece || ""}
+                    onChange={(e) =>
+                      setFormUnitPerPiece(parseFloat(e.target.value) || 0)
+                    }
+                    required
+                    fullWidth
+                    inputProps={{ min: 0, step: 0.0001 }}
+                  />
+                  <Typography variant="body2" color="text.secondary">
+                    m² por caja:{" "}
+                    {calculatedUnitPerBox > 0
+                      ? calculatedUnitPerBox.toFixed(4)
+                      : "—"}
                   </Typography>
                 </>
               )}
