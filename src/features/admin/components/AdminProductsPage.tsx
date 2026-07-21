@@ -31,7 +31,7 @@ import { adminApiUrl } from "@/features/admin/utils/adminApi";
 import { readApiError } from "@/features/admin/utils/readApiError";
 import { LabeledSelect } from "@/shared/components/LabeledSelect";
 import { AdminPageHeader } from "@/features/admin/components/AdminPageHeader";
-import { PageToolbar, ResponsiveTable, TableEmptyRow, TableLoadingRow } from "@/shared/ui";
+import { ConfirmDialog, PageToolbar, ResponsiveTable, TableEmptyRow, TableLoadingRow } from "@/shared/ui";
 
 type PricingMode = "neto" | "pvp";
 type FinishType = "decorado" | "pieza_lisa";
@@ -1044,29 +1044,20 @@ export function AdminProductsPage() {
         </DialogActions>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
-      <Dialog
+      <ConfirmDialog
         open={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
-      >
-        <DialogTitle>Confirmar eliminación</DialogTitle>
-        <DialogContent>
+        title="Confirmar eliminación"
+        message={
           <Typography>
             ¿Estás seguro de que deseas eliminar el producto{" "}
             <strong>{productToDelete?.name}</strong>?
           </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>Cancelar</Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={handleDeleteProduct}
-          >
-            Eliminar
-          </Button>
-        </DialogActions>
-      </Dialog>
+        }
+        confirmLabel="Eliminar"
+        confirmColor="error"
+        onCancel={() => setDeleteDialogOpen(false)}
+        onConfirm={() => void handleDeleteProduct()}
+      />
 
       <Dialog open={wizardOpen} onClose={() => setWizardOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>

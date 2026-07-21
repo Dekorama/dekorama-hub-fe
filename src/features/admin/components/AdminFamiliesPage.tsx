@@ -19,6 +19,7 @@ import {
 import { Add, Delete, Edit } from "@mui/icons-material";
 import { useCurrentUser, API } from "@/features/auth/hooks/useCurrentUser";
 import { useAppSnackbar } from "@/shared/hooks/useAppSnackbar";
+import { useConfirmDialog } from "@/shared/hooks/useConfirmDialog";
 import { readApiError } from "@/features/admin/utils/readApiError";
 import { AdminPageHeader } from "@/features/admin/components/AdminPageHeader";
 import { ResponsiveTable, TableEmptyRow, TableLoadingRow } from "@/shared/ui";
@@ -33,6 +34,7 @@ interface Family {
 export function AdminFamiliesPage() {
   const { user } = useCurrentUser();
   const { showSuccess, showError, SnackbarHost } = useAppSnackbar();
+  const { confirm, ConfirmDialogHost } = useConfirmDialog();
   const [families, setFamilies] = useState<Family[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -120,7 +122,13 @@ export function AdminFamiliesPage() {
   }
 
   async function deleteFamily(code: string) {
-    if (!confirm(`¿Eliminar familia ${code}?`)) return;
+    const ok = await confirm({
+      title: "Confirmar eliminación",
+      message: `¿Eliminar familia ${code}?`,
+      confirmLabel: "Eliminar",
+      confirmColor: "error",
+    });
+    if (!ok) return;
     const res = await fetch(`${API}/products/families/${code}`, {
       method: "DELETE",
       credentials: "include",
@@ -232,6 +240,7 @@ export function AdminFamiliesPage() {
         </DialogActions>
       </Dialog>
 
+      <ConfirmDialogHost />
       <SnackbarHost />
     </>
   );

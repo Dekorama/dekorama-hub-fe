@@ -28,7 +28,7 @@ import { useCurrentUser, API } from "@/features/auth/hooks/useCurrentUser";
 import { useAppSnackbar } from "@/shared/hooks/useAppSnackbar";
 import { getMarketConfig } from "@/shared/utils/market";
 import { notifyCartUpdated } from "@/shared/utils/cartEvents";
-import { ResponsiveTable } from "@/shared/ui";
+import { ConfirmDialog, ResponsiveTable } from "@/shared/ui";
 
 interface CartProduct {
   sku: string;
@@ -353,39 +353,29 @@ function CartPageContent() {
           </DialogActions>
         </Dialog>
 
-        <Dialog open={!!removeItemId} onClose={() => setRemoveItemId(null)}>
-          <DialogTitle>Eliminar producto</DialogTitle>
-          <DialogContent>
-            <Typography>¿Eliminar este producto del carrito?</Typography>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setRemoveItemId(null)}>Cancelar</Button>
-            <Button
-              color="error"
-              variant="contained"
-              onClick={() => {
-                const id = removeItemId;
-                setRemoveItemId(null);
-                if (id) void handleRemoveItem(id);
-              }}
-            >
-              Eliminar
-            </Button>
-          </DialogActions>
-        </Dialog>
+        <ConfirmDialog
+          open={!!removeItemId}
+          title="Eliminar producto"
+          message="¿Eliminar este producto del carrito?"
+          confirmLabel="Eliminar"
+          confirmColor="error"
+          onCancel={() => setRemoveItemId(null)}
+          onConfirm={() => {
+            const id = removeItemId;
+            setRemoveItemId(null);
+            if (id) void handleRemoveItem(id);
+          }}
+        />
 
-        <Dialog open={clearCartOpen} onClose={() => setClearCartOpen(false)}>
-          <DialogTitle>Vaciar carrito</DialogTitle>
-          <DialogContent>
-            <Typography>¿Vaciar todo el carrito?</Typography>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setClearCartOpen(false)}>Cancelar</Button>
-            <Button color="error" variant="contained" onClick={() => void handleClearCartConfirm()}>
-              Vaciar
-            </Button>
-          </DialogActions>
-        </Dialog>
+        <ConfirmDialog
+          open={clearCartOpen}
+          title="Vaciar carrito"
+          message="¿Vaciar todo el carrito?"
+          confirmLabel="Vaciar"
+          confirmColor="error"
+          onCancel={() => setClearCartOpen(false)}
+          onConfirm={() => void handleClearCartConfirm()}
+        />
 
         <SnackbarHost />
       </Container>

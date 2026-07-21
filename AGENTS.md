@@ -73,9 +73,10 @@ Use shared primitives — do not reinvent:
 - `ScrollableTabs` — tab bars
 - `PageToolbar` — filter/action rows that stack on `xs`
 - `TableLoadingRow` / `TableEmptyRow` — in-table loading spinner and empty message rows
+- `ConfirmDialog` / `useConfirmDialog` — never `window.confirm` / `alert`; small modal for destructive/confirm actions
 
-Import: `import { ResponsiveTable, ScrollableTabs, PageToolbar, TableLoadingRow, TableEmptyRow } from "@/shared/ui"`.
-
+Import: `import { ResponsiveTable, ScrollableTabs, PageToolbar, TableLoadingRow, TableEmptyRow, ConfirmDialog } from "@/shared/ui"`.
+Hook: `import { useConfirmDialog } from "@/shared/hooks/useConfirmDialog"`.
 ### New screen checklist
 
 1. Add / extend `features/<name>/components/...`

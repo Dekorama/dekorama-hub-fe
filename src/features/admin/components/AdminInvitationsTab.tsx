@@ -26,6 +26,7 @@ import {
   Refresh as RefreshIcon,
 } from "@mui/icons-material";
 import { API } from "@/features/auth/hooks/useCurrentUser";
+import { useConfirmDialog } from "@/shared/hooks/useConfirmDialog";
 import { ResponsiveTable, TableEmptyRow, TableLoadingRow } from "@/shared/ui";
 
 type InvitationStatus = "pending" | "accepted" | "expired" | "revoked";
@@ -55,6 +56,7 @@ const STATUS_COLOR: Record<
 };
 
 export function AdminInvitationsTab() {
+  const { confirm, ConfirmDialogHost } = useConfirmDialog();
   const [emails, setEmails] = useState<string[]>([]);
   const [currentEmail, setCurrentEmail] = useState("");
   const [invitations, setInvitations] = useState<AdminInvitation[]>([]);
@@ -143,7 +145,13 @@ export function AdminInvitationsTab() {
     confirmMsg: string,
     successMsg: string,
   ) => {
-    if (!confirm(confirmMsg)) return;
+    const ok = await confirm({
+      title: action === "delete" ? "Confirmar eliminación" : "Confirmar acción",
+      message: confirmMsg,
+      confirmLabel: action === "delete" ? "Eliminar" : action === "revoke" ? "Revocar" : "Reenviar",
+      confirmColor: action === "resend" ? "primary" : "error",
+    });
+    if (!ok) return;
 
     setActionId(id);
     setError("");
@@ -179,6 +187,7 @@ export function AdminInvitationsTab() {
 
   return (
     <Stack spacing={3}>
+      <ConfirmDialogHost />
       {error && (
         <Alert severity="error" onClose={() => setError("")}>
           {error}
