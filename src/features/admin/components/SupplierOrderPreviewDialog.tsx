@@ -37,7 +37,7 @@ export interface SupplierPreviewLine {
 }
 
 export interface SupplierPreviewGroup {
-  supplier: { id: string; name: string; email: string };
+  supplier: { id: string; name: string; email: string; emails?: string[] };
   lines: SupplierPreviewLine[];
   estimatedTotal: number;
 }
@@ -196,8 +196,10 @@ export function SupplierOrderPreviewDialog({
                   <Typography variant="subtitle1" fontWeight={600}>
                     {group.supplier.name}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {group.supplier.email}
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    {[group.supplier.email, ...(group.supplier.emails ?? [])]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </Typography>
                   <ResponsiveTable minWidth={480} size="small" elevation={0}>
                     <TableHead>

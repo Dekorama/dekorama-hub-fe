@@ -44,6 +44,10 @@ export function getClientDocumentOptions(
   return types.map((value) => ({ value, label: DOCUMENT_LABELS[value] }));
 }
 
+export function defaultSupplierDocumentType(market: MarketCode): ClientDocumentType {
+  return market === "VE" ? "rif" : "cif";
+}
+
 export function getClientDocumentLabel(type: ClientDocumentType): string {
   return DOCUMENT_LABELS[type];
 }
