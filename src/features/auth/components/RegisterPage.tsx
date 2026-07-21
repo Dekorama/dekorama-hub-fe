@@ -59,8 +59,8 @@ function RegistroForm() {
     const loadInvitation = async () => {
       try {
         const endpoint = adminToken
-          ? `${API}/admin/accept-invite/${adminToken}`
-          : `${API}/communities/accept-invite/${token}`;
+          ? `${API}/admin/accept-invite/${encodeURIComponent(adminToken)}`
+          : `${API}/communities/accept-invite/${encodeURIComponent(token!)}`;
 
         const res = await fetch(endpoint, {
           credentials: "include",

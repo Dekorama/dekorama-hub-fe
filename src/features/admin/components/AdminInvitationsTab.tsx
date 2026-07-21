@@ -5,6 +5,7 @@ import {
   Box,
   Button,
   Chip,
+  IconButton,
   Paper,
   Stack,
   TextField,
@@ -15,17 +16,43 @@ import {
   TableRow,
   Alert,
   CircularProgress,
+  Tooltip,
 } from "@mui/material";
-import { Add as AddIcon, Send as SendIcon } from "@mui/icons-material";
+import {
+  Add as AddIcon,
+  Send as SendIcon,
+  Delete as DeleteIcon,
+  Block as BlockIcon,
+  Refresh as RefreshIcon,
+} from "@mui/icons-material";
 import { API } from "@/features/auth/hooks/useCurrentUser";
 import { ResponsiveTable, TableEmptyRow, TableLoadingRow } from "@/shared/ui";
+
+type InvitationStatus = "pending" | "accepted" | "expired" | "revoked";
 
 interface AdminInvitation {
   id: string;
   inviteeEmail: string;
-  status: "pending" | "accepted" | "expired";
+  status: InvitationStatus;
   createdAt: string;
 }
+
+const STATUS_LABEL: Record<InvitationStatus, string> = {
+  pending: "Pendiente",
+  accepted: "Aceptada",
+  expired: "Expirada",
+  revoked: "Revocada",
+};
+
+const STATUS_COLOR: Record<
+  InvitationStatus,
+  "warning" | "success" | "default" | "error"
+> = {
+  pending: "warning",
+  accepted: "success",
+  expired: "default",
+  revoked: "error",
+};
 
 export function AdminInvitationsTab() {
   const [emails, setEmails] = useState<string[]>([]);
@@ -33,6 +60,7 @@ export function AdminInvitationsTab() {
   const [invitations, setInvitations] = useState<AdminInvitation[]>([]);
   const [loading, setLoading] = useState(false);
   const [listLoading, setListLoading] = useState(true);
+  const [actionId, setActionId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -78,10 +106,11 @@ export function AdminInvitationsTab() {
       });
 
       if (!res.ok) {
-        throw new Error("Error al enviar invitaciones");
+        const data = (await res.json().catch(() => ({}))) as { message?: string };
+        throw new Error(data.message || "Error al enviar invitaciones");
       }
 
-      const newInvitations = await res.json();
+      const newInvitations = (await res.json()) as AdminInvitation[];
       setSuccess(`${newInvitations.length} invitación(es) enviada(s)`);
       setEmails([]);
       void loadInvitations();
@@ -105,6 +134,42 @@ export function AdminInvitationsTab() {
       console.error("Error loading invitations:", err);
     } finally {
       setListLoading(false);
+    }
+  };
+
+  const runAction = async (
+    id: string,
+    action: "revoke" | "resend" | "delete",
+    confirmMsg: string,
+    successMsg: string,
+  ) => {
+    if (!confirm(confirmMsg)) return;
+
+    setActionId(id);
+    setError("");
+    setSuccess("");
+
+    try {
+      const path =
+        action === "delete"
+          ? `${API}/admin/invitations/${id}`
+          : `${API}/admin/invitations/${id}/${action}`;
+      const res = await fetch(path, {
+        method: action === "delete" ? "DELETE" : "POST",
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { message?: string };
+        throw new Error(data.message || "No se pudo completar la acción");
+      }
+
+      setSuccess(successMsg);
+      void loadInvitations();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Error en la acción");
+    } finally {
+      setActionId(null);
     }
   };
 
@@ -188,47 +253,108 @@ export function AdminInvitationsTab() {
           Historial de Invitaciones
         </Typography>
 
-        <ResponsiveTable minWidth={480}>
+        <ResponsiveTable minWidth={560}>
           <TableHead>
             <TableRow>
               <TableCell>Email</TableCell>
               <TableCell>Estado</TableCell>
               <TableCell>Fecha de Envío</TableCell>
+              <TableCell align="right">Acciones</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {listLoading ? (
-              <TableLoadingRow colSpan={3} />
+              <TableLoadingRow colSpan={4} />
             ) : invitations.length === 0 ? (
-              <TableEmptyRow colSpan={3} message="No has enviado invitaciones aún." />
+              <TableEmptyRow colSpan={4} message="No has enviado invitaciones aún." />
             ) : (
-              invitations.map((inv) => (
-                <TableRow key={inv.id}>
-                  <TableCell>{inv.inviteeEmail}</TableCell>
-                  <TableCell>
-                    <Chip
-                      label={
-                        inv.status === "pending"
-                          ? "Pendiente"
-                          : inv.status === "accepted"
-                          ? "Aceptada"
-                          : "Expirada"
-                      }
-                      color={
-                        inv.status === "pending"
-                          ? "warning"
-                          : inv.status === "accepted"
-                          ? "success"
-                          : "default"
-                      }
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    {new Date(inv.createdAt).toLocaleDateString()}
-                  </TableCell>
-                </TableRow>
-              ))
+              invitations.map((inv) => {
+                const busy = actionId === inv.id;
+                const canRevoke = inv.status === "pending";
+                const canResend = inv.status !== "accepted";
+
+                return (
+                  <TableRow key={inv.id}>
+                    <TableCell>{inv.inviteeEmail}</TableCell>
+                    <TableCell>
+                      <Chip
+                        label={STATUS_LABEL[inv.status] ?? inv.status}
+                        color={STATUS_COLOR[inv.status] ?? "default"}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      {new Date(inv.createdAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell align="right">
+                      <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                        {canResend && (
+                          <Tooltip title="Reenviar">
+                            <span>
+                              <IconButton
+                                size="small"
+                                disabled={busy}
+                                aria-label="Reenviar invitación"
+                                onClick={() =>
+                                  void runAction(
+                                    inv.id,
+                                    "resend",
+                                    `¿Reenviar invitación a ${inv.inviteeEmail}?`,
+                                    "Invitación reenviada",
+                                  )
+                                }
+                              >
+                                {busy ? <CircularProgress size={16} /> : <RefreshIcon fontSize="small" />}
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        )}
+                        {canRevoke && (
+                          <Tooltip title="Revocar">
+                            <span>
+                              <IconButton
+                                size="small"
+                                disabled={busy}
+                                aria-label="Revocar invitación"
+                                onClick={() =>
+                                  void runAction(
+                                    inv.id,
+                                    "revoke",
+                                    `¿Revocar invitación de ${inv.inviteeEmail}? El enlace dejará de funcionar.`,
+                                    "Invitación revocada",
+                                  )
+                                }
+                              >
+                                <BlockIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        )}
+                        <Tooltip title="Eliminar">
+                          <span>
+                            <IconButton
+                              size="small"
+                              color="error"
+                              disabled={busy}
+                              aria-label="Eliminar invitación"
+                              onClick={() =>
+                                void runAction(
+                                  inv.id,
+                                  "delete",
+                                  `¿Eliminar invitación de ${inv.inviteeEmail}?`,
+                                  "Invitación eliminada",
+                                )
+                              }
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </ResponsiveTable>
