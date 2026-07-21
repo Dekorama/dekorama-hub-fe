@@ -159,8 +159,7 @@ export function AdminProductsPage() {
   const [formIsActive, setFormIsActive] = useState(true);
   const isSpainMarket = market === "ES";
   const [formSupplierId, setFormSupplierId] = useState("");
-  const [formSupplierFactoryCode, setFormSupplierFactoryCode] = useState("");
-  const [loadingFactoryCode, setLoadingFactoryCode] = useState(false);
+  const [loadingSupplier, setLoadingSupplier] = useState(false);
   const [familySuppliers, setFamilySuppliers] = useState<SupplierOption[]>([]);
   const [suppliersLinkedToFamily, setSuppliersLinkedToFamily] = useState(true);
   const [loadingFamilySuppliers, setLoadingFamilySuppliers] = useState(false);
@@ -177,7 +176,6 @@ export function AdminProductsPage() {
     prefix: "",
   });
   const [wizSupplierId, setWizSupplierId] = useState("");
-  const [wizFactoryCode, setWizFactoryCode] = useState("");
   const [wizFamily, setWizFamily] = useState({ code: "", name: "" });
   const [createdSku, setCreatedSku] = useState("");
 
@@ -300,10 +298,9 @@ export function AdminProductsPage() {
     }
   }
 
-  async function loadProductFactoryCode(sku: string) {
-    setLoadingFactoryCode(true);
+  async function loadProductSupplier(sku: string) {
+    setLoadingSupplier(true);
     setFormSupplierId("");
-    setFormSupplierFactoryCode("");
     try {
       const res = await fetch(
         adminApiUrl(`/suppliers/factory-codes/list?productSku=${encodeURIComponent(sku)}`, market),
@@ -314,12 +311,11 @@ export function AdminProductsPage() {
       const primary = codes.find((c) => c.isPrimary) ?? codes[0];
       if (primary) {
         setFormSupplierId(primary.supplierId);
-        setFormSupplierFactoryCode(primary.factoryCode);
       }
     } catch (error) {
-      console.error("Error loading factory code:", error);
+      console.error("Error loading product supplier:", error);
     } finally {
-      setLoadingFactoryCode(false);
+      setLoadingSupplier(false);
     }
   }
 
@@ -344,7 +340,7 @@ export function AdminProductsPage() {
     setFormStock(Number(product.stock) || 0);
     setFormDescription(product.description || "");
     setFormIsActive(product.isActive);
-    void loadProductFactoryCode(product.sku);
+    void loadProductSupplier(product.sku);
     setDialogOpen(true);
   }
 
@@ -364,7 +360,6 @@ export function AdminProductsPage() {
     setFormDescription("");
     setFormIsActive(true);
     setFormSupplierId("");
-    setFormSupplierFactoryCode("");
   }
 
   async function handleSaveProduct() {
@@ -404,9 +399,6 @@ export function AdminProductsPage() {
         name: formName,
         family: formFamily,
         supplierId: formSupplierId,
-        ...(formSupplierFactoryCode.trim()
-          ? { factoryCode: formSupplierFactoryCode.trim() }
-          : {}),
         pricingMode: formPricingMode,
         finishType: formFamily === "REV" ? formFinishType : null,
         factoryCost: formPricingMode === "neto" ? formFactoryCost : undefined,
@@ -480,8 +472,12 @@ export function AdminProductsPage() {
         setWizardStep(1);
       } else if (wizardStep === 1) {
         const prefix = wizSupplier.prefix.trim().toUpperCase();
-        if (!wizSupplier.name.trim() || !wizSupplier.email.trim() || prefix.length !== 3) {
-          showError("Proveedor: nombre, email y prefijo (3) obligatorios");
+        if (!wizSupplier.name.trim() || !wizSupplier.email.trim()) {
+          showError("Proveedor: nombre y email obligatorios");
+          return;
+        }
+        if (prefix && prefix.length !== 3) {
+          showError("Prefijo SKU: 3 caracteres o vacío (auto)");
           return;
         }
         const familyCode = wizFamily.code || formFamily;
@@ -496,7 +492,7 @@ export function AdminProductsPage() {
           body: JSON.stringify({
             name: wizSupplier.name.trim(),
             email: wizSupplier.email.trim(),
-            prefix,
+            ...(prefix ? { prefix } : {}),
             familyCodes: [familyCode],
             market,
           }),
@@ -507,6 +503,9 @@ export function AdminProductsPage() {
         }
         const data = (await res.json()) as SupplierOption;
         setWizSupplierId(data.id);
+        if (data.prefix) {
+          setWizSupplier((prev) => ({ ...prev, prefix: data.prefix ?? prev.prefix }));
+        }
         setWizardStep(2);
       } else if (wizardStep === 2) {
         if (!formName.trim()) {
@@ -530,9 +529,6 @@ export function AdminProductsPage() {
             name: formName,
             family: familyCode,
             supplierId: wizSupplierId,
-            ...(wizFactoryCode.trim()
-              ? { factoryCode: wizFactoryCode.trim() }
-              : {}),
             pricingMode: formPricingMode,
             finishType: familyCode === "REV" ? formFinishType || undefined : undefined,
             factoryCost: formPricingMode === "neto" ? formFactoryCost : undefined,
@@ -826,7 +822,7 @@ export function AdminProductsPage() {
               emptyLabel={
                 !formFamily
                   ? "Elige familia primero"
-                  : loadingFamilySuppliers || loadingFactoryCode
+                  : loadingFamilySuppliers || loadingSupplier
                     ? "Cargando…"
                     : supplierOptions.length === 0
                       ? "No hay proveedores — créalos en Proveedores"
@@ -834,7 +830,7 @@ export function AdminProductsPage() {
               }
               required
               fullWidth
-              disabled={!formFamily || loadingFamilySuppliers || loadingFactoryCode}
+              disabled={!formFamily || loadingFamilySuppliers || loadingSupplier}
               formControlProps={{ fullWidth: true, required: true }}
               onChange={(e) => setFormSupplierId(String(e.target.value))}
             >
@@ -860,13 +856,6 @@ export function AdminProductsPage() {
                 SKU al guardar: {skuPreviewPrefix}-#####
               </Typography>
             )}
-            <TextField
-              label="Código de fábrica"
-              value={formSupplierFactoryCode}
-              onChange={(e) => setFormSupplierFactoryCode(e.target.value)}
-              fullWidth
-              helperText="Opcional. Si vacío, se usa el SKU (ej. NDS-00001) en pedidos."
-            />
             <Divider sx={{ my: 1 }} />
             {formFamily === "REV" && (
               <LabeledSelect
@@ -1139,7 +1128,7 @@ export function AdminProductsPage() {
                   })
                 }
                 fullWidth
-                helperText="SKU: PREFIJO-00001"
+                helperText="Opcional. Si vacío, se genera desde el nombre."
                 inputProps={{ maxLength: 3, style: { fontFamily: "monospace" } }}
               />
               <Typography variant="caption" color="text.secondary">
@@ -1158,13 +1147,6 @@ export function AdminProductsPage() {
                 onChange={(e) => setFormName(e.target.value)}
                 required
                 fullWidth
-              />
-              <TextField
-                label="Código fábrica"
-                value={wizFactoryCode}
-                onChange={(e) => setWizFactoryCode(e.target.value)}
-                fullWidth
-                helperText="Opcional. Si vacío, se usa el SKU en pedidos."
               />
               {(wizFamily.code || formFamily) === "REV" && (
                 <LabeledSelect

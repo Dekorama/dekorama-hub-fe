@@ -251,8 +251,8 @@ export function AdminSuppliersPage() {
       return;
     }
     const prefix = form.prefix.trim().toUpperCase();
-    if (prefix.length !== 3) {
-      showError("Prefijo SKU: 3 caracteres");
+    if (prefix && prefix.length !== 3) {
+      showError("Prefijo SKU: 3 caracteres o vacío (auto)");
       return;
     }
     if (form.familyCodes.length === 0) {
@@ -275,7 +275,7 @@ export function AdminSuppliersPage() {
         credentials: "include",
         body: JSON.stringify({
           name: form.name.trim(),
-          prefix,
+          ...(prefix ? { prefix } : editing ? {} : {}),
           familyCodes: form.familyCodes,
           legalType: form.legalType,
           documentType: form.documentNumber.trim() ? form.documentType : null,
@@ -434,9 +434,12 @@ export function AdminSuppliersPage() {
                   prefix: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 3),
                 })
               }
-              required
               fullWidth
-              helperText="SKU del producto: PREFIJO-00001"
+              helperText={
+                editing
+                  ? "SKU del producto: PREFIJO-00001"
+                  : "Opcional. Si vacío, se genera desde el nombre."
+              }
               inputProps={{ maxLength: 3, style: { fontFamily: "monospace", letterSpacing: 2 } }}
             />
 
