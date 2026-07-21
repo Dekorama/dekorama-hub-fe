@@ -66,7 +66,7 @@ export function AdminReportsPage() {
   return (
     <>
       <AdminPageHeader
-        title={`Estadísticas — ${config.label}`}
+        title={`Estadísticas de ${config.label}`}
         actions={
           <ExportButton
             endpoint="/admin/exports/sales-ledger"
