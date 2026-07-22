@@ -82,6 +82,7 @@ interface SupplierInvoice {
   status: string;
   supplier?: { name: string };
   supplierOrderId: string;
+  fileUrl?: string | null;
 }
 
 const PO_STATUS_OPTIONS = ["draft", "sent", "confirmed", "received", "cancelled"] as const;
@@ -246,6 +247,7 @@ export function AdminSupplierOrdersPage() {
     amount: "",
     issueDate: "",
   });
+  const [invFile, setInvFile] = useState<File | null>(null);
 
   const filteredOrders = useMemo(() => {
     if (!clientOrderFilter) return orders;
@@ -375,6 +377,20 @@ export function AdminSupplierOrdersPage() {
     }
     setSaving(true);
     try {
+      let fileUrl: string | undefined;
+      if (invFile) {
+        const fd = new FormData();
+        fd.append("file", invFile);
+        const up = await fetch(`${API}/uploads/invoices/supplier`, {
+          method: "POST",
+          credentials: "include",
+          body: fd,
+        });
+        if (!up.ok) throw new Error(await readApiError(up, "Error al subir PDF"));
+        const uploaded = (await up.json()) as { fileUrl: string };
+        fileUrl = uploaded.fileUrl;
+      }
+
       const res = await fetch(`${API}/supplier-orders/invoices`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -384,17 +400,32 @@ export function AdminSupplierOrdersPage() {
           invoiceNumber: invForm.invoiceNumber,
           amount,
           issueDate: invForm.issueDate || new Date().toISOString().slice(0, 10),
+          ...(fileUrl ? { fileUrl } : {}),
         }),
       });
       if (!res.ok) throw new Error(await readApiError(res, "Error al registrar factura"));
       showSuccess("Factura registrada");
       setInvoiceOpen(false);
       setInvForm({ supplierOrderId: "", invoiceNumber: "", amount: "", issueDate: "" });
+      setInvFile(null);
       void fetchAll();
     } catch (err: unknown) {
       showError(err instanceof Error ? err.message : "Error al registrar factura");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function openSupplierInvoiceFile(id: string) {
+    try {
+      const res = await fetch(`${API}/supplier-orders/invoices/${id}/file`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(await readApiError(res, "Sin archivo"));
+      const data = (await res.json()) as { url: string };
+      window.open(data.url, "_blank", "noopener,noreferrer");
+    } catch (err: unknown) {
+      showError(err instanceof Error ? err.message : "No se pudo abrir el archivo");
     }
   }
 
@@ -472,6 +503,7 @@ export function AdminSupplierOrdersPage() {
       amount: total > 0 ? String(total) : "",
       issueDate: new Date().toISOString().slice(0, 10),
     });
+    setInvFile(null);
     setInvoiceOpen(true);
   }
 
@@ -490,7 +522,13 @@ export function AdminSupplierOrdersPage() {
             <Button variant="contained" onClick={() => setCreateOpen(true)}>
               Nuevo PO (manual)
             </Button>
-            <Button variant="outlined" onClick={() => setInvoiceOpen(true)}>
+            <Button
+              variant="outlined"
+              onClick={() => {
+                setInvFile(null);
+                setInvoiceOpen(true);
+              }}
+            >
               Registrar factura
             </Button>
           </>
@@ -590,6 +628,11 @@ export function AdminSupplierOrdersPage() {
                         </MenuItem>
                       ))}
                     </LabeledSelect>
+                    {i.fileUrl ? (
+                      <Button size="small" onClick={() => void openSupplierInvoiceFile(i.id)}>
+                        PDF
+                      </Button>
+                    ) : null}
                   </Stack>
                 </TableCell>
               </TableRow>
@@ -726,10 +769,25 @@ export function AdminSupplierOrdersPage() {
               fullWidth
               InputLabelProps={{ shrink: true }}
             />
+            <Button variant="outlined" component="label">
+              {invFile ? invFile.name : "Adjuntar PDF factura"}
+              <input
+                type="file"
+                hidden
+                accept="application/pdf"
+                onChange={(e) => setInvFile(e.target.files?.[0] ?? null)}
+              />
+            </Button>
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setInvoiceOpen(false)} disabled={saving}>
+          <Button
+            onClick={() => {
+              setInvoiceOpen(false);
+              setInvFile(null);
+            }}
+            disabled={saving}
+          >
             Cancelar
           </Button>
           <Button variant="contained" onClick={createInvoice} disabled={saving}>

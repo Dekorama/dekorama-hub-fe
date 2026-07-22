@@ -54,6 +54,7 @@ interface Product {
   unitPerPiece: number | null;
   stock: number;
   description: string | null;
+  imageUrl: string | null;
   isActive: boolean;
 }
 
@@ -157,6 +158,8 @@ export function AdminProductsPage() {
   const [formStock, setFormStock] = useState<number>(0);
   const [formDescription, setFormDescription] = useState("");
   const [formIsActive, setFormIsActive] = useState(true);
+  const [formImageUrl, setFormImageUrl] = useState("");
+  const [formImageFile, setFormImageFile] = useState<File | null>(null);
   const isSpainMarket = market === "ES";
   const [formSupplierId, setFormSupplierId] = useState("");
   const [loadingSupplier, setLoadingSupplier] = useState(false);
@@ -340,6 +343,8 @@ export function AdminProductsPage() {
     setFormStock(Number(product.stock) || 0);
     setFormDescription(product.description || "");
     setFormIsActive(product.isActive);
+    setFormImageUrl(product.imageUrl || "");
+    setFormImageFile(null);
     void loadProductSupplier(product.sku);
     setDialogOpen(true);
   }
@@ -359,7 +364,24 @@ export function AdminProductsPage() {
     setFormStock(0);
     setFormDescription("");
     setFormIsActive(true);
+    setFormImageUrl("");
+    setFormImageFile(null);
     setFormSupplierId("");
+  }
+
+  async function uploadProductImage(file: File): Promise<string> {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(`${API}/uploads/products`, {
+      method: "POST",
+      credentials: "include",
+      body: fd,
+    });
+    if (!res.ok) {
+      throw new Error(await readApiError(res, "Error al subir imagen"));
+    }
+    const data = (await res.json()) as { url: string };
+    return data.url;
   }
 
   async function handleSaveProduct() {
@@ -395,6 +417,11 @@ export function AdminProductsPage() {
     setSaving(true);
 
     try {
+      let imageUrl = formImageUrl || undefined;
+      if (formImageFile) {
+        imageUrl = await uploadProductImage(formImageFile);
+      }
+
       const body = {
         name: formName,
         family: formFamily,
@@ -409,6 +436,7 @@ export function AdminProductsPage() {
         unitPerPiece: isM2Unit(formUnit) ? formUnitPerPiece : null,
         stock: isSpainMarket ? 0 : formStock,
         description: formDescription || undefined,
+        imageUrl,
         isActive: formIsActive,
         market,
       };
@@ -1005,6 +1033,36 @@ export function AdminProductsPage() {
               rows={3}
               fullWidth
             />
+            <Button variant="outlined" component="label" fullWidth>
+              {formImageFile
+                ? formImageFile.name
+                : formImageUrl
+                  ? "Cambiar imagen"
+                  : "Subir imagen"}
+              <input
+                type="file"
+                hidden
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] ?? null;
+                  setFormImageFile(file);
+                }}
+              />
+            </Button>
+            {(formImageFile || formImageUrl) && (
+              <Box
+                component="img"
+                src={formImageFile ? URL.createObjectURL(formImageFile) : formImageUrl}
+                alt="Vista previa"
+                sx={{
+                  width: "100%",
+                  maxHeight: 180,
+                  objectFit: "contain",
+                  borderRadius: 1,
+                  bgcolor: "action.hover",
+                }}
+              />
+            )}
             <FormControlLabel
               control={
                 <Switch
