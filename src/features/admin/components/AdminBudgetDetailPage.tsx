@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, Fragment } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   Alert,
@@ -45,8 +45,15 @@ import {
   getProposalStatusLabel,
   getProposalTypeLabel,
 } from "@/shared/utils/proposalLabels";
-import { ResponsiveTable, ScrollableTabs } from "@/shared/ui";
-import { lineNetTotal } from "@/features/admin/utils/lineItemMath";
+import { PageToolbar, ResponsiveTable, ScrollableTabs } from "@/shared/ui";
+import {
+  displayUnitLabel,
+  lineNetTotal,
+  normalizeUnit,
+  parsePackaging,
+} from "@/features/admin/utils/lineItemMath";
+import { BudgetLineRow } from "@/features/admin/components/BudgetLineRow";
+import { adminApiUrl } from "@/features/admin/utils/adminApi";
 
 interface Material {
   id: string;
@@ -60,6 +67,8 @@ interface Material {
   sectionId: string | null;
   externalComment?: string | null;
   internalComment?: string | null;
+  piecesPerBox: number | null;
+  unitPerPiece: number | null;
 }
 
 interface Section {
@@ -119,10 +128,19 @@ function getWorkflowStep(status: string): number {
   return 0;
 }
 
+type ProductPackagingLookup = {
+  piecesPerBox: number | null;
+  unitPerPiece: number | null;
+  unit: string;
+};
+
+/** Detail table: SKU | Producto | qty | Ud | Pedido | Precio | Dto | Subtotal | actions = 9 */
+const DETAIL_COMMENTS_COLSPAN = 9;
+
 export function AdminBudgetDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useCurrentUser();
-  const { config } = useAdminMarket();
+  const { config, market } = useAdminMarket();
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
@@ -150,41 +168,77 @@ export function AdminBudgetDetailPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const [pRes, mRes, sRes, cRes] = await Promise.all([
-      fetch(`${API}/proposals/${id}`, { credentials: "include" }),
-      fetch(`${API}/proposals/${id}/materials`, { credentials: "include" }),
-      fetch(`${API}/proposals/${id}/sections`, { credentials: "include" }),
-      fetch(`${API}/proposals/${id}/comments`, { credentials: "include" }),
-    ]);
-    if (pRes.ok) {
-      const p = (await pRes.json()) as Proposal;
-      setProposal(p);
-      setTitle(p.title ?? "");
-      setLaborCost(Number(p.laborCost) || 0);
-      setTaxRate(
-        p.taxRate !== undefined && p.taxRate !== null
-          ? Number(p.taxRate)
-          : config.taxRate,
-      );
-      if (p.sections?.length) setSections(p.sections);
+    try {
+      const [pRes, mRes, sRes, cRes, productsRes] = await Promise.all([
+        fetch(`${API}/proposals/${id}`, { credentials: "include" }),
+        fetch(`${API}/proposals/${id}/materials`, { credentials: "include" }),
+        fetch(`${API}/proposals/${id}/sections`, { credentials: "include" }),
+        fetch(`${API}/proposals/${id}/comments`, { credentials: "include" }),
+        fetch(adminApiUrl("/products", market), { credentials: "include" }),
+      ]);
+
+      let packagingMap = new Map<string, ProductPackagingLookup>();
+      if (productsRes.ok) {
+        const products = (await productsRes.json()) as Record<string, unknown>[];
+        packagingMap = new Map(
+          products.map((p) => {
+            const sku = String(p.sku ?? "");
+            const packaging = parsePackaging({
+              piecesPerBox: p.piecesPerBox as number | string | null | undefined,
+              unitPerPiece: p.unitPerPiece as number | string | null | undefined,
+            });
+            return [
+              sku,
+              {
+                ...packaging,
+                unit: normalizeUnit(typeof p.unit === "string" ? p.unit : "unidad"),
+              },
+            ] as const;
+          }),
+        );
+      }
+
+      if (pRes.ok) {
+        const p = (await pRes.json()) as Proposal;
+        setProposal(p);
+        setTitle(p.title ?? "");
+        setLaborCost(Number(p.laborCost) || 0);
+        setTaxRate(
+          p.taxRate !== undefined && p.taxRate !== null
+            ? Number(p.taxRate)
+            : config.taxRate,
+        );
+        if (p.sections?.length) setSections(p.sections);
+      }
+      if (mRes.ok) {
+        const raw = (await mRes.json()) as Omit<
+          Material,
+          "piecesPerBox" | "unitPerPiece"
+        >[];
+        setMaterials(
+          raw.map((m) => {
+            const fromProduct = packagingMap.get(m.productSku);
+            return {
+              ...m,
+              unit: normalizeUnit(fromProduct?.unit ?? m.unit ?? "unidad"),
+              discountPct: Number(m.discountPct) || 0,
+              quantity: Number(m.quantity),
+              orderedQuantity: Number(m.orderedQuantity) || 0,
+              suggestedPrice: Number(m.suggestedPrice),
+              piecesPerBox: fromProduct?.piecesPerBox ?? null,
+              unitPerPiece: fromProduct?.unitPerPiece ?? null,
+              externalComment: m.externalComment ?? "",
+              internalComment: m.internalComment ?? "",
+            };
+          }),
+        );
+      }
+      if (sRes.ok) setSections(await sRes.json());
+      if (cRes.ok) setComments(await cRes.json());
+    } finally {
+      setLoading(false);
     }
-    if (mRes.ok) {
-      const raw = (await mRes.json()) as Material[];
-      setMaterials(
-        raw.map((m) => ({
-          ...m,
-          unit: m.unit || "unidad",
-          discountPct: Number(m.discountPct) || 0,
-          quantity: Number(m.quantity),
-          orderedQuantity: Number(m.orderedQuantity) || 0,
-          suggestedPrice: Number(m.suggestedPrice),
-        })),
-      );
-    }
-    if (sRes.ok) setSections(await sRes.json());
-    if (cRes.ok) setComments(await cRes.json());
-    setLoading(false);
-  }, [id, config.taxRate]);
+  }, [id, config.taxRate, market]);
 
   useEffect(() => {
     if (user?.role === "admin" && id) void fetchData();
@@ -270,7 +324,7 @@ export function AdminBudgetDetailPage() {
                 quantity: m.quantity,
                 suggestedPrice: Number(m.suggestedPrice),
                 discountPct: Number(m.discountPct) || 0,
-                unit: m.unit,
+                unit: normalizeUnit(m.unit),
                 externalComment: m.externalComment || null,
                 internalComment: m.internalComment || null,
               })),
@@ -443,26 +497,41 @@ export function AdminBudgetDetailPage() {
   return (
     <>
       <Stack spacing={2}>
-        <Box>
-          <Button component={Link} href="/admin/presupuestos" size="small" sx={{ mb: 1 }}>
+        <PageToolbar>
+          <Button component={Link} href="/admin/presupuestos" size="small">
             ← Volver
           </Button>
-          <Typography variant="h5" sx={{ mb: 1 }}>
-            {title || "Presupuesto / Solicitud"}
-          </Typography>
-          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-            <Chip
-              label={getProposalTypeLabel(proposal.type)}
-              size="small"
-              variant="outlined"
-            />
-            <Chip
-              label={getProposalStatusLabel(proposal.status)}
-              size="small"
-              color={getProposalStatusColor(proposal.status)}
-            />
-          </Stack>
-        </Box>
+          <Box sx={{ flex: 1, minWidth: { sm: "auto" } }}>
+            <Typography variant="h5">{title || "Presupuesto / Solicitud"}</Typography>
+            <Stack
+              direction="row"
+              spacing={1}
+              alignItems="center"
+              flexWrap="wrap"
+              useFlexGap
+              sx={{ mt: 0.5 }}
+            >
+              <Chip
+                label={getProposalTypeLabel(proposal.type)}
+                size="small"
+                variant="outlined"
+              />
+              <Chip
+                label={getProposalStatusLabel(proposal.status)}
+                size="small"
+                color={getProposalStatusColor(proposal.status)}
+              />
+            </Stack>
+          </Box>
+          <Button
+            variant="outlined"
+            startIcon={activeAction === "save" ? <CircularProgress size={16} /> : <SaveIcon />}
+            onClick={handleSave}
+            disabled={activeAction !== null}
+          >
+            Guardar
+          </Button>
+        </PageToolbar>
 
         <Paper sx={{ p: 2 }}>
           <Typography variant="subtitle2" sx={{ mb: 1 }}>
@@ -550,116 +619,52 @@ export function AdminBudgetDetailPage() {
             <Typography variant="subtitle1" sx={{ mb: 1 }}>
               {group.name}
             </Typography>
-            <ResponsiveTable minWidth={780} size="small" elevation={0}>
+            <ResponsiveTable minWidth={920} size="small" elevation={0}>
               <TableHead>
                 <TableRow>
                   <TableCell>SKU</TableCell>
                   <TableCell>Producto</TableCell>
-                  <TableCell>Cantidad</TableCell>
+                  <TableCell>Cant. / m²</TableCell>
                   <TableCell>Ud</TableCell>
                   <TableCell>Pedido</TableCell>
-                  <TableCell align="right">Precio unitario</TableCell>
+                  <TableCell align="right">Precio</TableCell>
                   <TableCell align="right">Dto %</TableCell>
                   <TableCell align="right">Subtotal</TableCell>
+                  <TableCell align="right" width={56} />
                 </TableRow>
               </TableHead>
               <TableBody>
                 {group.materials.map((m) => (
-                  <Fragment key={m.id}>
-                  <TableRow>
-                    <TableCell>{m.productSku}</TableCell>
-                    <TableCell>{m.productName}</TableCell>
-                    <TableCell>
-                      <TextField
-                        type="number"
-                        size="small"
-                        value={m.quantity}
-                        onChange={(e) =>
-                          updateMaterial(m.id, {
-                            quantity: parseFloat(e.target.value) || 0,
-                          })
-                        }
-                        inputProps={{ min: 0, step: "any" }}
-                        sx={{ width: 90 }}
-                      />
-                    </TableCell>
-                    <TableCell>{m.unit || "unidad"}</TableCell>
-                    <TableCell>
-                      {m.orderedQuantity ?? 0}/{m.quantity}
-                    </TableCell>
-                    <TableCell align="right">
-                      <TextField
-                        type="number"
-                        size="small"
-                        value={m.suggestedPrice}
-                        onChange={(e) =>
-                          updateMaterial(m.id, {
-                            suggestedPrice: parseFloat(e.target.value) || 0,
-                          })
-                        }
-                        inputProps={{ min: 0, step: 0.01 }}
-                        sx={{ width: 110 }}
-                      />
-                    </TableCell>
-                    <TableCell align="right">
-                      <TextField
-                        type="number"
-                        size="small"
-                        value={m.discountPct ?? 0}
-                        onChange={(e) =>
-                          updateMaterial(m.id, {
-                            discountPct: Math.min(
-                              100,
-                              Math.max(0, parseFloat(e.target.value) || 0),
-                            ),
-                          })
-                        }
-                        inputProps={{ min: 0, max: 100, step: 0.01 }}
-                        sx={{ width: 90 }}
-                      />
-                    </TableCell>
-                    <TableCell align="right">
-                      $
-                      {lineNetTotal(
-                        Number(m.quantity),
-                        Number(m.suggestedPrice),
-                        Number(m.discountPct) || 0,
-                      ).toFixed(2)}
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell colSpan={8} sx={{ borderTop: 0, pt: 0 }}>
-                      <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
-                        <TextField
-                          label="Comentario externo"
-                          size="small"
-                          fullWidth
-                          value={m.externalComment ?? ""}
-                          onChange={(e) =>
-                            updateMaterial(m.id, {
-                              externalComment: e.target.value,
-                            })
-                          }
-                        />
-                        <TextField
-                          label="Comentario interno"
-                          size="small"
-                          fullWidth
-                          value={m.internalComment ?? ""}
-                          onChange={(e) =>
-                            updateMaterial(m.id, {
-                              internalComment: e.target.value,
-                            })
-                          }
-                        />
-                      </Stack>
-                    </TableCell>
-                  </TableRow>
-                  </Fragment>
+                  <BudgetLineRow
+                    key={m.id}
+                    commentsColSpan={DETAIL_COMMENTS_COLSPAN}
+                    line={{
+                      unit: m.unit,
+                      quantity: m.quantity,
+                      suggestedPrice: m.suggestedPrice,
+                      discountPct: m.discountPct ?? 0,
+                      piecesPerBox: m.piecesPerBox,
+                      unitPerPiece: m.unitPerPiece,
+                      externalComment: m.externalComment ?? "",
+                      internalComment: m.internalComment ?? "",
+                    }}
+                    onChange={(patch) => updateMaterial(m.id, patch)}
+                    leadingCells={
+                      <>
+                        <TableCell sx={{ verticalAlign: "top" }}>{m.productSku}</TableCell>
+                        <TableCell sx={{ verticalAlign: "top" }}>{m.productName}</TableCell>
+                      </>
+                    }
+                    afterUnitCell={
+                      <TableCell sx={{ verticalAlign: "top", whiteSpace: "nowrap" }}>
+                        {m.orderedQuantity ?? 0}/{m.quantity}
+                      </TableCell>
+                    }
+                  />
                 ))}
                 {group.materials.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">
+                    <TableCell colSpan={DETAIL_COMMENTS_COLSPAN} align="center">
                       Sin líneas
                     </TableCell>
                   </TableRow>
@@ -843,7 +848,7 @@ export function AdminBudgetDetailPage() {
                       }}
                     />
                   }
-                  label={`${m.productSku} — ${m.productName} (×${remaining} ${m.unit || "ud"})`}
+                  label={`${m.productSku} — ${m.productName} (×${remaining} ${displayUnitLabel(m.unit)})`}
                 />
               );
             })}

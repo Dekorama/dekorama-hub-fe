@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   Autocomplete,
   Box,
@@ -12,24 +15,37 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
   IconButton,
   MenuItem,
   Paper,
   Stack,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
   TextField,
   Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import Link from "next/link";
 import { useCurrentUser, API } from "@/features/auth/hooks/useCurrentUser";
 import { useAdminMarket } from "@/features/admin/context/AdminMarketContext";
 import { adminApiUrl } from "@/features/admin/utils/adminApi";
 import { getClientDocumentOptions, isMarketCode } from "@/shared/utils/market";
 import type { ClientDocumentType, ClientLegalType } from "@/shared/utils/userLabels";
-import { lineNetTotal } from "@/features/admin/utils/lineItemMath";
+import {
+  lineNetTotal,
+  normalizeUnit,
+  parsePackaging,
+} from "@/features/admin/utils/lineItemMath";
+import { PageToolbar, ResponsiveTable } from "@/shared/ui";
+import {
+  BudgetLineRow,
+  type BudgetLineEditable,
+} from "@/features/admin/components/BudgetLineRow";
 
 interface ClientOption {
   id: string;
@@ -46,18 +62,14 @@ interface ProductOption {
   name: string;
   pvpPrice: number;
   unit: string;
+  piecesPerBox: number | null;
+  unitPerPiece: number | null;
 }
 
-interface LineDraft {
+interface LineDraft extends BudgetLineEditable {
   key: string;
   productSku: string;
   productName: string;
-  unit: string;
-  quantity: number;
-  suggestedPrice: number;
-  discountPct: number;
-  externalComment: string;
-  internalComment: string;
 }
 
 interface SectionDraft {
@@ -79,6 +91,8 @@ function emptyLine(): LineDraft {
     quantity: 1,
     suggestedPrice: 0,
     discountPct: 0,
+    piecesPerBox: null,
+    unitPerPiece: null,
     externalComment: "",
     internalComment: "",
   };
@@ -89,6 +103,21 @@ function emptySection(index: number): SectionDraft {
     key: newKey(),
     name: `Sección ${index + 1}`,
     materials: [emptyLine()],
+  };
+}
+
+function mapProductOption(raw: Record<string, unknown>): ProductOption {
+  const packaging = parsePackaging({
+    piecesPerBox: raw.piecesPerBox as number | string | null | undefined,
+    unitPerPiece: raw.unitPerPiece as number | string | null | undefined,
+  });
+  return {
+    sku: String(raw.sku ?? ""),
+    name: String(raw.name ?? ""),
+    pvpPrice: Number(raw.pvpPrice) || 0,
+    unit: normalizeUnit(typeof raw.unit === "string" ? raw.unit : "unidad"),
+    piecesPerBox: packaging.piecesPerBox,
+    unitPerPiece: packaging.unitPerPiece,
   };
 }
 
@@ -152,6 +181,9 @@ async function readApiError(res: Response, fallback: string): Promise<string> {
   return fallback;
 }
 
+/** Create table: Producto | qty | Ud | Precio | Dto | Subtotal | actions = 7 */
+const CREATE_COMMENTS_COLSPAN = 7;
+
 export function AdminBudgetCreatePage() {
   const router = useRouter();
   const { user } = useCurrentUser();
@@ -202,7 +234,10 @@ export function AdminBudgetCreatePage() {
         fetch(adminApiUrl("/products", market), { credentials: "include" }),
       ]);
       if (cRes.ok) setClients(await cRes.json());
-      if (pRes.ok) setProducts(await pRes.json());
+      if (pRes.ok) {
+        const raw = (await pRes.json()) as Record<string, unknown>[];
+        setProducts(raw.map(mapProductOption));
+      }
     })();
   }, [user, market]);
 
@@ -264,14 +299,18 @@ export function AdminBudgetCreatePage() {
         unit: "unidad",
         suggestedPrice: 0,
         discountPct: 0,
+        piecesPerBox: null,
+        unitPerPiece: null,
       });
       return;
     }
     updateLine(sectionIndex, lineIndex, {
       productSku: product.sku,
       productName: product.name,
-      unit: product.unit || "unidad",
+      unit: normalizeUnit(product.unit),
       suggestedPrice: Number(product.pvpPrice),
+      piecesPerBox: product.piecesPerBox,
+      unitPerPiece: product.unitPerPiece,
     });
   }
 
@@ -344,7 +383,7 @@ export function AdminBudgetCreatePage() {
                 quantity: m.quantity,
                 suggestedPrice: m.suggestedPrice,
                 discountPct: m.discountPct,
-                unit: m.unit,
+                unit: normalizeUnit(m.unit),
                 externalComment: m.externalComment || undefined,
                 internalComment: m.internalComment || undefined,
               })),
@@ -370,8 +409,8 @@ export function AdminBudgetCreatePage() {
   }
 
   return (
-    <Stack spacing={2}>
-      <Stack direction="row" spacing={1} alignItems="center">
+    <Stack spacing={2} sx={{ pb: 10 }}>
+      <PageToolbar>
         <Button
           component={Link}
           href="/admin/presupuestos"
@@ -380,8 +419,13 @@ export function AdminBudgetCreatePage() {
         >
           Volver
         </Button>
-        <Typography variant="h5">Nuevo presupuesto</Typography>
-      </Stack>
+        <Typography variant="h5" sx={{ flex: 1, minWidth: { sm: "auto" } }}>
+          Nuevo presupuesto
+        </Typography>
+        <Button variant="contained" onClick={handleSave} disabled={saving}>
+          {saving ? <CircularProgress size={18} color="inherit" /> : "Crear presupuesto"}
+        </Button>
+      </PageToolbar>
 
       {error && (
         <Alert severity="error" onClose={() => setError(null)}>
@@ -453,26 +497,35 @@ export function AdminBudgetCreatePage() {
             sx={{ width: { sm: 160 } }}
           />
         </Stack>
-        <Stack spacing={2} sx={{ mt: 2 }}>
-          <TextField
-            label="Comentario externo (cliente)"
-            size="small"
-            fullWidth
-            multiline
-            minRows={2}
-            value={externalComment}
-            onChange={(e) => setExternalComment(e.target.value)}
-          />
-          <TextField
-            label="Comentario interno"
-            size="small"
-            fullWidth
-            multiline
-            minRows={2}
-            value={internalComment}
-            onChange={(e) => setInternalComment(e.target.value)}
-          />
-        </Stack>
+        <Accordion disableGutters elevation={0} sx={{ mt: 1, "&:before": { display: "none" } }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography variant="body2" color="text.secondary">
+              Comentarios del documento
+            </Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Stack spacing={2}>
+              <TextField
+                label="Comentario externo (cliente)"
+                size="small"
+                fullWidth
+                multiline
+                minRows={2}
+                value={externalComment}
+                onChange={(e) => setExternalComment(e.target.value)}
+              />
+              <TextField
+                label="Comentario interno"
+                size="small"
+                fullWidth
+                multiline
+                minRows={2}
+                value={internalComment}
+                onChange={(e) => setInternalComment(e.target.value)}
+              />
+            </Stack>
+          </AccordionDetails>
+        </Accordion>
       </Paper>
 
       {sections.map((section, sectionIndex) => (
@@ -496,121 +549,52 @@ export function AdminBudgetCreatePage() {
             </IconButton>
           </Stack>
 
-          <Stack spacing={1.5}>
-            {section.materials.map((line, lineIndex) => (
-              <Stack key={line.key} spacing={1}>
-              <Stack
-                direction={{ xs: "column", md: "row" }}
-                spacing={1}
-                alignItems={{ md: "center" }}
-              >
-                <Autocomplete
-                  sx={{ flex: 2, minWidth: 220 }}
-                  options={products}
-                  value={products.find((p) => p.sku === line.productSku) ?? null}
-                  onChange={(_, product) => applyProduct(sectionIndex, lineIndex, product)}
-                  getOptionLabel={(p) => `${p.sku} — ${p.name}`}
-                  isOptionEqualToValue={(a, b) => a.sku === b.sku}
-                  renderInput={(params) => (
-                    <TextField {...params} label="Producto" size="small" />
-                  )}
-                />
-                <TextField
-                  label="Cant."
-                  type="number"
-                  size="small"
-                  value={line.quantity}
-                  onChange={(e) =>
-                    updateLine(sectionIndex, lineIndex, {
-                      quantity: parseFloat(e.target.value) || 0,
-                    })
-                  }
-                  inputProps={{ min: 0, step: "any" }}
-                  sx={{ width: { md: 90 } }}
-                />
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ minWidth: 40, textAlign: "center" }}
-                >
-                  {line.unit || "—"}
-                </Typography>
-                <TextField
-                  label="Precio"
-                  type="number"
-                  size="small"
-                  value={line.suggestedPrice}
-                  onChange={(e) =>
-                    updateLine(sectionIndex, lineIndex, {
-                      suggestedPrice: parseFloat(e.target.value) || 0,
-                    })
-                  }
-                  inputProps={{ min: 0, step: 0.01 }}
-                  sx={{ width: { md: 110 } }}
-                />
-                <TextField
-                  label="Dto %"
-                  type="number"
-                  size="small"
-                  value={line.discountPct}
-                  onChange={(e) =>
-                    updateLine(sectionIndex, lineIndex, {
-                      discountPct: Math.min(
-                        100,
-                        Math.max(0, parseFloat(e.target.value) || 0),
-                      ),
-                    })
-                  }
-                  inputProps={{ min: 0, max: 100, step: 0.01 }}
-                  sx={{ width: { md: 90 } }}
-                />
-                <Typography sx={{ minWidth: 90 }} align="right">
-                  $
-                  {lineNetTotal(
-                    line.quantity,
-                    Number(line.suggestedPrice),
-                    line.discountPct,
-                  ).toFixed(2)}
-                </Typography>
-                <IconButton
-                  aria-label="Eliminar línea"
-                  disabled={section.materials.length === 1}
-                  onClick={() =>
+          <ResponsiveTable minWidth={860} size="small" elevation={0}>
+            <TableHead>
+              <TableRow>
+                <TableCell>Producto</TableCell>
+                <TableCell>Cant. / m²</TableCell>
+                <TableCell>Ud</TableCell>
+                <TableCell align="right">Precio</TableCell>
+                <TableCell align="right">Dto %</TableCell>
+                <TableCell align="right">Subtotal</TableCell>
+                <TableCell align="right" width={88} />
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {section.materials.map((line, lineIndex) => (
+                <BudgetLineRow
+                  key={line.key}
+                  line={line}
+                  commentsColSpan={CREATE_COMMENTS_COLSPAN}
+                  canDelete={section.materials.length > 1}
+                  onDelete={() =>
                     updateSection(sectionIndex, {
                       materials: section.materials.filter((_, j) => j !== lineIndex),
                     })
                   }
-                >
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
-              </Stack>
-              <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
-                <TextField
-                  label="Comentario externo"
-                  size="small"
-                  fullWidth
-                  value={line.externalComment}
-                  onChange={(e) =>
-                    updateLine(sectionIndex, lineIndex, {
-                      externalComment: e.target.value,
-                    })
+                  onChange={(patch) => updateLine(sectionIndex, lineIndex, patch)}
+                  leadingCells={
+                    <TableCell sx={{ minWidth: 240, verticalAlign: "top" }}>
+                      <Autocomplete
+                        size="small"
+                        options={products}
+                        value={products.find((p) => p.sku === line.productSku) ?? null}
+                        onChange={(_, product) =>
+                          applyProduct(sectionIndex, lineIndex, product)
+                        }
+                        getOptionLabel={(p) => `${p.sku} — ${p.name}`}
+                        isOptionEqualToValue={(a, b) => a.sku === b.sku}
+                        renderInput={(params) => (
+                          <TextField {...params} label="Producto" size="small" />
+                        )}
+                      />
+                    </TableCell>
                   }
                 />
-                <TextField
-                  label="Comentario interno"
-                  size="small"
-                  fullWidth
-                  value={line.internalComment}
-                  onChange={(e) =>
-                    updateLine(sectionIndex, lineIndex, {
-                      internalComment: e.target.value,
-                    })
-                  }
-                />
-              </Stack>
-              </Stack>
-            ))}
-          </Stack>
+              ))}
+            </TableBody>
+          </ResponsiveTable>
 
           <Button
             size="small"
@@ -635,22 +619,38 @@ export function AdminBudgetCreatePage() {
         Agregar sección
       </Button>
 
-      <Paper sx={{ p: 2 }}>
-        <Stack spacing={0.5} alignItems="flex-end">
-          <Typography>Subtotal: ${subtotal.toFixed(2)}</Typography>
-          <Typography>
-            {config.taxLabel} ({taxRate}%): ${taxAmount.toFixed(2)}
-          </Typography>
-          <Typography fontWeight="bold">Total: ${total.toFixed(2)}</Typography>
-        </Stack>
-        <Divider sx={{ my: 2 }} />
-        <Stack direction="row" spacing={1} justifyContent="flex-end">
-          <Button component={Link} href="/admin/presupuestos" disabled={saving}>
-            Cancelar
-          </Button>
-          <Button variant="contained" onClick={handleSave} disabled={saving}>
-            {saving ? <CircularProgress size={18} color="inherit" /> : "Crear presupuesto"}
-          </Button>
+      <Paper
+        sx={{
+          p: 2,
+          position: "sticky",
+          bottom: 0,
+          zIndex: 2,
+          borderTop: 1,
+          borderColor: "divider",
+          bgcolor: "background.paper",
+        }}
+      >
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          spacing={2}
+          alignItems={{ sm: "center" }}
+          justifyContent="space-between"
+        >
+          <Stack spacing={0.25}>
+            <Typography variant="body2" color="text.secondary">
+              Subtotal: ${subtotal.toFixed(2)} · {config.taxLabel} ({taxRate}%): $
+              {taxAmount.toFixed(2)}
+            </Typography>
+            <Typography fontWeight="bold">Total: ${total.toFixed(2)}</Typography>
+          </Stack>
+          <Stack direction="row" spacing={1} justifyContent="flex-end">
+            <Button component={Link} href="/admin/presupuestos" disabled={saving}>
+              Cancelar
+            </Button>
+            <Button variant="contained" onClick={handleSave} disabled={saving}>
+              {saving ? <CircularProgress size={18} color="inherit" /> : "Crear presupuesto"}
+            </Button>
+          </Stack>
         </Stack>
       </Paper>
 
