@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Checkbox,
@@ -53,6 +54,14 @@ import {
   parsePackaging,
 } from "@/features/admin/utils/lineItemMath";
 import { BudgetLineRow } from "@/features/admin/components/BudgetLineRow";
+import {
+  BudgetClientForm,
+  buildClientProfileData,
+  clientFormHasChanges,
+  clientToFormValues,
+  emptyBudgetClientForm,
+  type BudgetClientFormValues,
+} from "@/features/admin/components/BudgetClientForm";
 import { adminApiUrl } from "@/features/admin/utils/adminApi";
 
 interface Material {
@@ -107,7 +116,15 @@ interface Comment {
   author?: { name: string; email: string };
 }
 
-type ActionKey = "save" | "ready" | "email" | "pdf" | "order" | "comment";
+type ActionKey =
+  | "save"
+  | "ready"
+  | "email"
+  | "pdf"
+  | "order"
+  | "comment"
+  | "client"
+  | "createClient";
 
 async function readApiError(res: Response, fallback: string): Promise<string> {
   try {
@@ -156,6 +173,15 @@ export function AdminBudgetDetailPage() {
   const [selectedMaterialIds, setSelectedMaterialIds] = useState<string[]>([]);
   const [orderExternalNotes, setOrderExternalNotes] = useState("");
   const [orderInternalNotes, setOrderInternalNotes] = useState("");
+  const [clients, setClients] = useState<ClientInfo[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [clientForm, setClientForm] = useState<BudgetClientFormValues>(() =>
+    emptyBudgetClientForm(config.taxRate, market),
+  );
+  const [clientDialogOpen, setClientDialogOpen] = useState(false);
+  const [newClientForm, setNewClientForm] = useState<BudgetClientFormValues>(() =>
+    emptyBudgetClientForm(config.taxRate, market),
+  );
   const [feedback, setFeedback] = useState<{
     open: boolean;
     message: string;
@@ -209,6 +235,13 @@ export function AdminBudgetDetailPage() {
             : config.taxRate,
         );
         if (p.sections?.length) setSections(p.sections);
+        if (p.client) {
+          setSelectedClientId(p.client.id);
+          setClientForm(clientToFormValues(p.client, config.taxRate, market));
+        } else {
+          setSelectedClientId(null);
+          setClientForm(emptyBudgetClientForm(config.taxRate, market));
+        }
       }
       if (mRes.ok) {
         const raw = (await mRes.json()) as Omit<
@@ -243,6 +276,16 @@ export function AdminBudgetDetailPage() {
   useEffect(() => {
     if (user?.role === "admin" && id) void fetchData();
   }, [user, id, fetchData]);
+
+  useEffect(() => {
+    if (user?.role !== "admin") return;
+    void (async () => {
+      const res = await fetch(adminApiUrl("/admin/users?role=client", market), {
+        credentials: "include",
+      });
+      if (res.ok) setClients((await res.json()) as ClientInfo[]);
+    })();
+  }, [user, market]);
 
   const pendingMaterials = useMemo(
     () =>
@@ -305,6 +348,7 @@ export function AdminBudgetDetailPage() {
   async function handleSave() {
     setActiveAction("save");
     try {
+      const clientId = selectedClientId ?? proposal?.client?.id;
       const res = await fetch(`${API}/proposals/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -313,6 +357,7 @@ export function AdminBudgetDetailPage() {
           title: title || null,
           taxRate,
           laborCost,
+          clientId: clientId || undefined,
           sections: grouped
             .filter((g) => g.id !== null || g.materials.length > 0)
             .map((g, i) => ({
@@ -341,6 +386,127 @@ export function AdminBudgetDetailPage() {
     } finally {
       setActiveAction(null);
     }
+  }
+
+  async function handleSaveClient() {
+    const clientId = selectedClientId ?? proposal?.client?.id;
+    if (!clientId) {
+      showFeedback("No hay cliente asignado", "error");
+      return;
+    }
+    if (!clientForm.name.trim() || !clientForm.email.trim()) {
+      showFeedback("Nombre y email son obligatorios", "error");
+      return;
+    }
+    setActiveAction("client");
+    try {
+      const current =
+        clients.find((c) => c.id === clientId) ?? proposal?.client ?? null;
+      const needsPatch =
+        !current ||
+        clientFormHasChanges(clientForm, current, config.taxRate, market);
+
+      if (needsPatch) {
+        const res = await fetch(`${API}/admin/users/${clientId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            name: clientForm.name.trim(),
+            email: clientForm.email.trim(),
+            taxRate: clientForm.taxExempt ? 0 : clientForm.taxRate,
+            taxExempt: clientForm.taxExempt,
+            profileData: buildClientProfileData(clientForm),
+          }),
+        });
+        if (!res.ok) {
+          throw new Error(await readApiError(res, "No se pudo actualizar el cliente"));
+        }
+        const updated = (await res.json()) as ClientInfo;
+        setClients((prev) => {
+          const exists = prev.some((c) => c.id === updated.id);
+          return exists
+            ? prev.map((c) => (c.id === updated.id ? updated : c))
+            : [updated, ...prev];
+        });
+      }
+
+      if (proposal?.client?.id !== clientId) {
+        const linkRes = await fetch(`${API}/proposals/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ clientId }),
+        });
+        if (!linkRes.ok) {
+          throw new Error(await readApiError(linkRes, "No se pudo asignar el cliente"));
+        }
+      }
+
+      await fetchData();
+      showFeedback("Cliente guardado", "success");
+    } catch (err: unknown) {
+      showFeedback(err instanceof Error ? err.message : "Error al guardar cliente", "error");
+    } finally {
+      setActiveAction(null);
+    }
+  }
+
+  async function handleCreateClient() {
+    if (!newClientForm.name.trim() || !newClientForm.email.trim()) {
+      showFeedback("Nombre y email son obligatorios", "error");
+      return;
+    }
+    if (newClientForm.password.length < 8) {
+      showFeedback("La contraseña debe tener al menos 8 caracteres", "error");
+      return;
+    }
+    setActiveAction("createClient");
+    try {
+      const res = await fetch(`${API}/admin/clients`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          name: newClientForm.name,
+          email: newClientForm.email,
+          password: newClientForm.password,
+          country: market,
+          taxRate: newClientForm.taxExempt ? 0 : newClientForm.taxRate,
+          taxExempt: newClientForm.taxExempt,
+          profileData: buildClientProfileData(newClientForm),
+        }),
+      });
+      if (!res.ok) throw new Error(await readApiError(res, "No se pudo crear el cliente"));
+      const created = (await res.json()) as ClientInfo;
+      setClients((prev) => [created, ...prev]);
+      setSelectedClientId(created.id);
+      setClientForm(clientToFormValues(created, config.taxRate, market));
+      setClientDialogOpen(false);
+      setNewClientForm(emptyBudgetClientForm(config.taxRate, market));
+
+      const linkRes = await fetch(`${API}/proposals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ clientId: created.id }),
+      });
+      if (!linkRes.ok) {
+        throw new Error(await readApiError(linkRes, "Cliente creado pero no asignado"));
+      }
+      await fetchData();
+      showFeedback("Cliente creado y asignado", "success");
+    } catch (err: unknown) {
+      showFeedback(err instanceof Error ? err.message : "Error al crear cliente", "error");
+    } finally {
+      setActiveAction(null);
+    }
+  }
+
+  function selectClient(client: ClientInfo | null) {
+    if (!client) return;
+    setSelectedClientId(client.id);
+    setClientForm(clientToFormValues(client, config.taxRate, market));
   }
 
   async function handleReady() {
@@ -488,11 +654,13 @@ export function AdminBudgetDetailPage() {
       : proposal.status === "signed");
 
   const visibleComments = comments.filter((c) => c.visibility === commentTab);
-  const phone =
-    proposal.client?.profileData &&
-    typeof proposal.client.profileData.phone === "string"
-      ? proposal.client.profileData.phone
-      : null;
+  const clientOptions = useMemo(() => {
+    if (!proposal.client) return clients;
+    if (clients.some((c) => c.id === proposal.client!.id)) return clients;
+    return [proposal.client, ...clients];
+  }, [clients, proposal.client]);
+  const selectedClientOption =
+    clientOptions.find((c) => c.id === selectedClientId) ?? null;
 
   return (
     <>
@@ -534,17 +702,54 @@ export function AdminBudgetDetailPage() {
         </PageToolbar>
 
         <Paper sx={{ p: 2 }}>
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+          <Typography variant="subtitle2" sx={{ mb: 1.5 }}>
             Datos del cliente
           </Typography>
-          <Typography>
-            {proposal.client?.name ?? "Cliente"} · {proposal.client?.email}
-          </Typography>
-          {phone && (
-            <Typography variant="body2" color="text.secondary">
-              Tel: {phone}
-            </Typography>
-          )}
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mb: 2 }}>
+            <Autocomplete
+              sx={{ flex: 1 }}
+              options={clientOptions}
+              value={selectedClientOption}
+              onChange={(_, value) => selectClient(value)}
+              getOptionLabel={(c) => `${c.name} (${c.email})`}
+              isOptionEqualToValue={(a, b) => a.id === b.id}
+              renderInput={(params) => (
+                <TextField {...params} label="Buscar / cambiar cliente" size="small" />
+              )}
+            />
+            <Button
+              variant="outlined"
+              startIcon={<AddIcon />}
+              onClick={() => {
+                setNewClientForm(emptyBudgetClientForm(config.taxRate, market));
+                setClientDialogOpen(true);
+              }}
+              disabled={activeAction !== null}
+            >
+              Nuevo cliente
+            </Button>
+            <Button
+              variant="contained"
+              onClick={handleSaveClient}
+              disabled={activeAction !== null || !selectedClientId}
+              startIcon={
+                activeAction === "client" ? (
+                  <CircularProgress size={16} color="inherit" />
+                ) : (
+                  <SaveIcon />
+                )
+              }
+            >
+              Guardar cliente
+            </Button>
+          </Stack>
+          <BudgetClientForm
+            value={clientForm}
+            onChange={(patch) => setClientForm((prev) => ({ ...prev, ...patch }))}
+            market={market}
+            taxLabel={config.taxLabel}
+            disabled={activeAction !== null}
+          />
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ mt: 2 }}>
             <TextField
               label="Título"
@@ -574,7 +779,8 @@ export function AdminBudgetDetailPage() {
 
         {proposal.status === "proforma_ready" && (
           <Alert severity="success" icon={<CheckCircleOutlineIcon />}>
-            La proforma está lista. Envíala al cliente por email o comparte el PDF para que la revise y firme.
+            Proforma lista. Puedes seguir editando líneas y cliente; el PDF usa los datos
+            guardados actuales. Envíala por email o descarga el PDF.
           </Alert>
         )}
 
@@ -794,6 +1000,53 @@ export function AdminBudgetDetailPage() {
           </Stack>
         </Paper>
       </Stack>
+
+      <Dialog
+        open={clientDialogOpen}
+        onClose={() => setClientDialogOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Nuevo cliente</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 1 }}>
+            <BudgetClientForm
+              value={newClientForm}
+              onChange={(patch) => setNewClientForm((prev) => ({ ...prev, ...patch }))}
+              market={market}
+              taxLabel={config.taxLabel}
+              showPassword
+              disabled={activeAction === "createClient"}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setClientDialogOpen(false)}
+            disabled={activeAction === "createClient"}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleCreateClient}
+            disabled={
+              activeAction === "createClient" ||
+              !newClientForm.name.trim() ||
+              !newClientForm.email.trim()
+            }
+            startIcon={
+              activeAction === "createClient" ? (
+                <CircularProgress size={16} color="inherit" />
+              ) : (
+                <AddIcon />
+              )
+            }
+          >
+            Crear y asignar
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={orderDialogOpen}

@@ -16,7 +16,6 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
-  MenuItem,
   Paper,
   Stack,
   TableBody,
@@ -34,8 +33,6 @@ import Link from "next/link";
 import { useCurrentUser, API } from "@/features/auth/hooks/useCurrentUser";
 import { useAdminMarket } from "@/features/admin/context/AdminMarketContext";
 import { adminApiUrl } from "@/features/admin/utils/adminApi";
-import { getClientDocumentOptions, isMarketCode } from "@/shared/utils/market";
-import type { ClientDocumentType, ClientLegalType } from "@/shared/utils/userLabels";
 import {
   lineNetTotal,
   normalizeUnit,
@@ -46,6 +43,14 @@ import {
   BudgetLineRow,
   type BudgetLineEditable,
 } from "@/features/admin/components/BudgetLineRow";
+import {
+  BudgetClientForm,
+  buildClientProfileData,
+  clientFormHasChanges,
+  clientToFormValues,
+  emptyBudgetClientForm,
+  type BudgetClientFormValues,
+} from "@/features/admin/components/BudgetClientForm";
 
 interface ClientOption {
   id: string;
@@ -121,55 +126,6 @@ function mapProductOption(raw: Record<string, unknown>): ProductOption {
   };
 }
 
-interface NewClientForm {
-  name: string;
-  email: string;
-  phone: string;
-  password: string;
-  legalType: ClientLegalType;
-  documentType: ClientDocumentType;
-  documentNumber: string;
-  address: string;
-  city: string;
-  province: string;
-  taxRate: number;
-  taxExempt: boolean;
-}
-
-function emptyNewClient(taxRate: number, market: string): NewClientForm {
-  const code = isMarketCode(market) ? market : "VE";
-  const docs = getClientDocumentOptions(code, "particular");
-  return {
-    name: "",
-    email: "",
-    phone: "",
-    password: "",
-    legalType: "particular",
-    documentType: docs[0]?.value ?? "cedula",
-    documentNumber: "",
-    address: "",
-    city: "",
-    province: "",
-    taxRate,
-    taxExempt: false,
-  };
-}
-
-function buildClientProfileData(form: NewClientForm): Record<string, string> {
-  const data: Record<string, string> = {
-    legalType: form.legalType,
-  };
-  if (form.phone.trim()) data.phone = form.phone.trim();
-  if (form.documentNumber.trim()) {
-    data.documentType = form.documentType;
-    data.documentNumber = form.documentNumber.trim();
-  }
-  if (form.address.trim()) data.address = form.address.trim();
-  if (form.city.trim()) data.city = form.city.trim();
-  if (form.province.trim()) data.province = form.province.trim();
-  return data;
-}
-
 async function readApiError(res: Response, fallback: string): Promise<string> {
   try {
     const data = (await res.json()) as { message?: string | string[] };
@@ -201,30 +157,16 @@ export function AdminBudgetCreatePage() {
   const [error, setError] = useState<string | null>(null);
   const [clientDialogOpen, setClientDialogOpen] = useState(false);
   const [creatingClient, setCreatingClient] = useState(false);
-  const [newClient, setNewClient] = useState<NewClientForm>(() =>
-    emptyNewClient(config.taxRate, market),
+  const [clientForm, setClientForm] = useState<BudgetClientFormValues>(() =>
+    emptyBudgetClientForm(config.taxRate, market),
   );
-
-  const documentOptions = useMemo(
-    () =>
-      getClientDocumentOptions(
-        isMarketCode(market) ? market : "VE",
-        newClient.legalType,
-      ),
-    [market, newClient.legalType],
+  const [newClientForm, setNewClientForm] = useState<BudgetClientFormValues>(() =>
+    emptyBudgetClientForm(config.taxRate, market),
   );
 
   useEffect(() => {
-    setNewClient((prev) => {
-      const options = getClientDocumentOptions(
-        isMarketCode(market) ? market : "VE",
-        prev.legalType,
-      );
-      const stillValid = options.some((o) => o.value === prev.documentType);
-      if (stillValid) return prev;
-      return { ...prev, documentType: options[0]?.value ?? prev.documentType };
-    });
-  }, [market]);
+    setNewClientForm(emptyBudgetClientForm(config.taxRate, market));
+  }, [market, config.taxRate]);
 
   useEffect(() => {
     if (user?.role !== "admin") return;
@@ -243,19 +185,24 @@ export function AdminBudgetCreatePage() {
 
   useEffect(() => {
     if (!selectedClient) {
+      setClientForm(emptyBudgetClientForm(config.taxRate, market));
       setTaxRate(config.taxRate);
       return;
     }
-    if (selectedClient.taxExempt) {
-      setTaxRate(0);
-      return;
-    }
-    setTaxRate(
-      selectedClient.taxRate !== undefined && selectedClient.taxRate !== null
-        ? Number(selectedClient.taxRate)
-        : config.taxRate,
-    );
-  }, [selectedClient, config.taxRate]);
+    const form = clientToFormValues(selectedClient, config.taxRate, market);
+    setClientForm(form);
+    setTaxRate(form.taxExempt ? 0 : form.taxRate);
+  }, [selectedClient, config.taxRate, market]);
+
+  function patchClientForm(patch: Partial<BudgetClientFormValues>) {
+    setClientForm((prev) => {
+      const next = { ...prev, ...patch };
+      if (patch.taxExempt !== undefined || patch.taxRate !== undefined) {
+        setTaxRate(next.taxExempt ? 0 : next.taxRate);
+      }
+      return next;
+    });
+  }
 
   const subtotal = useMemo(() => {
     const materials = sections.reduce(
@@ -315,6 +262,14 @@ export function AdminBudgetCreatePage() {
   }
 
   async function handleCreateClient() {
+    if (!newClientForm.name.trim() || !newClientForm.email.trim()) {
+      setError("Nombre y email son obligatorios");
+      return;
+    }
+    if (newClientForm.password.length < 8) {
+      setError("La contraseña debe tener al menos 8 caracteres");
+      return;
+    }
     setCreatingClient(true);
     setError(null);
     try {
@@ -323,13 +278,13 @@ export function AdminBudgetCreatePage() {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          name: newClient.name,
-          email: newClient.email,
-          password: newClient.password,
+          name: newClientForm.name,
+          email: newClientForm.email,
+          password: newClientForm.password,
           country: market,
-          taxRate: newClient.taxExempt ? 0 : newClient.taxRate,
-          taxExempt: newClient.taxExempt,
-          profileData: buildClientProfileData(newClient),
+          taxRate: newClientForm.taxExempt ? 0 : newClientForm.taxRate,
+          taxExempt: newClientForm.taxExempt,
+          profileData: buildClientProfileData(newClientForm),
         }),
       });
       if (!res.ok) throw new Error(await readApiError(res, "No se pudo crear el cliente"));
@@ -337,7 +292,7 @@ export function AdminBudgetCreatePage() {
       setClients((prev) => [created, ...prev]);
       setSelectedClient(created);
       setClientDialogOpen(false);
-      setNewClient(emptyNewClient(config.taxRate, market));
+      setNewClientForm(emptyBudgetClientForm(config.taxRate, market));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Error al crear cliente");
     } finally {
@@ -345,9 +300,39 @@ export function AdminBudgetCreatePage() {
     }
   }
 
+  async function persistSelectedClientUpdates(): Promise<ClientOption> {
+    if (!selectedClient) throw new Error("Selecciona o crea un cliente");
+    if (
+      !clientFormHasChanges(clientForm, selectedClient, config.taxRate, market)
+    ) {
+      return selectedClient;
+    }
+    const res = await fetch(`${API}/admin/users/${selectedClient.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        name: clientForm.name.trim(),
+        email: clientForm.email.trim(),
+        taxRate: clientForm.taxExempt ? 0 : clientForm.taxRate,
+        taxExempt: clientForm.taxExempt,
+        profileData: buildClientProfileData(clientForm),
+      }),
+    });
+    if (!res.ok) throw new Error(await readApiError(res, "No se pudo actualizar el cliente"));
+    const updated = (await res.json()) as ClientOption;
+    setClients((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    setSelectedClient(updated);
+    return updated;
+  }
+
   async function handleSave() {
     if (!selectedClient) {
       setError("Selecciona o crea un cliente");
+      return;
+    }
+    if (!clientForm.name.trim() || !clientForm.email.trim()) {
+      setError("Nombre y email del cliente son obligatorios");
       return;
     }
     const hasLines = sections.some((s) =>
@@ -361,14 +346,15 @@ export function AdminBudgetCreatePage() {
     setSaving(true);
     setError(null);
     try {
+      const client = await persistSelectedClientUpdates();
       const res = await fetch(`${API}/proposals/manual`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          clientId: selectedClient.id,
+          clientId: client.id,
           title: title || undefined,
-          taxRate,
+          taxRate: clientForm.taxExempt ? 0 : taxRate,
           laborCost,
           externalComment: externalComment || undefined,
           internalComment: internalComment || undefined,
@@ -449,20 +435,33 @@ export function AdminBudgetCreatePage() {
               <TextField {...params} label="Buscar cliente" size="small" />
             )}
           />
-          <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setClientDialogOpen(true)}>
+          <Button
+            variant="outlined"
+            startIcon={<AddIcon />}
+            onClick={() => {
+              setNewClientForm(emptyBudgetClientForm(config.taxRate, market));
+              setClientDialogOpen(true);
+            }}
+          >
             Nuevo cliente
           </Button>
         </Stack>
-        {selectedClient && (
-          <Box sx={{ mt: 1.5 }}>
-            <Typography variant="body2" color="text.secondary">
-              {selectedClient.name} · {selectedClient.email}
-              {selectedClient.profileData &&
-              typeof selectedClient.profileData.phone === "string"
-                ? ` · ${selectedClient.profileData.phone}`
-                : ""}
+        {selectedClient ? (
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+              Edita los datos si hace falta. Se guardan en el cliente al crear el presupuesto.
             </Typography>
+            <BudgetClientForm
+              value={clientForm}
+              onChange={patchClientForm}
+              market={market}
+              taxLabel={config.taxLabel}
+            />
           </Box>
+        ) : (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
+            Selecciona un cliente del sistema o crea uno nuevo.
+          </Typography>
         )}
       </Paper>
 
@@ -655,137 +654,15 @@ export function AdminBudgetCreatePage() {
       <Dialog open={clientDialogOpen} onClose={() => setClientDialogOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>Nuevo cliente</DialogTitle>
         <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              select
-              label="Tipo"
-              size="small"
-              value={newClient.legalType}
-              onChange={(e) => {
-                const legalType = e.target.value as ClientLegalType;
-                const options = getClientDocumentOptions(
-                  isMarketCode(market) ? market : "VE",
-                  legalType,
-                );
-                setNewClient((c) => ({
-                  ...c,
-                  legalType,
-                  documentType: options[0]?.value ?? c.documentType,
-                }));
-              }}
-            >
-              <MenuItem value="particular">Particular</MenuItem>
-              <MenuItem value="empresa">Empresa</MenuItem>
-            </TextField>
-            <TextField
-              label={newClient.legalType === "empresa" ? "Razón social" : "Nombre"}
-              size="small"
-              required
-              value={newClient.name}
-              onChange={(e) => setNewClient((c) => ({ ...c, name: e.target.value }))}
+          <Box sx={{ mt: 1 }}>
+            <BudgetClientForm
+              value={newClientForm}
+              onChange={(patch) => setNewClientForm((prev) => ({ ...prev, ...patch }))}
+              market={market}
+              taxLabel={config.taxLabel}
+              showPassword
             />
-            <TextField
-              label="Email"
-              size="small"
-              type="email"
-              required
-              value={newClient.email}
-              onChange={(e) => setNewClient((c) => ({ ...c, email: e.target.value }))}
-            />
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-              <TextField
-                select
-                label="Documento"
-                size="small"
-                value={newClient.documentType}
-                onChange={(e) =>
-                  setNewClient((c) => ({
-                    ...c,
-                    documentType: e.target.value as ClientDocumentType,
-                  }))
-                }
-                sx={{ minWidth: { sm: 140 } }}
-              >
-                {documentOptions.map((opt) => (
-                  <MenuItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </MenuItem>
-                ))}
-              </TextField>
-              <TextField
-                label="Número de documento"
-                size="small"
-                fullWidth
-                value={newClient.documentNumber}
-                onChange={(e) =>
-                  setNewClient((c) => ({ ...c, documentNumber: e.target.value }))
-                }
-              />
-            </Stack>
-            <TextField
-              label="Teléfono"
-              size="small"
-              value={newClient.phone}
-              onChange={(e) => setNewClient((c) => ({ ...c, phone: e.target.value }))}
-            />
-            <TextField
-              label="Dirección"
-              size="small"
-              value={newClient.address}
-              onChange={(e) => setNewClient((c) => ({ ...c, address: e.target.value }))}
-            />
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-              <TextField
-                label="Ciudad"
-                size="small"
-                fullWidth
-                value={newClient.city}
-                onChange={(e) => setNewClient((c) => ({ ...c, city: e.target.value }))}
-              />
-              <TextField
-                label="Provincia"
-                size="small"
-                fullWidth
-                value={newClient.province}
-                onChange={(e) => setNewClient((c) => ({ ...c, province: e.target.value }))}
-              />
-            </Stack>
-            <TextField
-              label="Contraseña"
-              size="small"
-              type="password"
-              required
-              value={newClient.password}
-              onChange={(e) => setNewClient((c) => ({ ...c, password: e.target.value }))}
-              helperText="Mínimo 8 caracteres. Compártela al cliente por canal seguro."
-              inputProps={{ minLength: 8 }}
-            />
-            <TextField
-              select
-              label="Exento de IVA"
-              size="small"
-              value={newClient.taxExempt ? "yes" : "no"}
-              onChange={(e) =>
-                setNewClient((c) => ({ ...c, taxExempt: e.target.value === "yes" }))
-              }
-            >
-              <MenuItem value="no">No</MenuItem>
-              <MenuItem value="yes">Sí</MenuItem>
-            </TextField>
-            {!newClient.taxExempt && (
-              <ClearableNumberField
-                label={`${config.taxLabel} %`}
-                size="small"
-                value={newClient.taxRate}
-                onValueChange={(taxRate) =>
-                  setNewClient((c) => ({
-                    ...c,
-                    taxRate,
-                  }))
-                }
-              />
-            )}
-          </Stack>
+          </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setClientDialogOpen(false)} disabled={creatingClient}>
@@ -794,7 +671,9 @@ export function AdminBudgetCreatePage() {
           <Button
             variant="contained"
             onClick={handleCreateClient}
-            disabled={creatingClient || !newClient.name || !newClient.email}
+            disabled={
+              creatingClient || !newClientForm.name.trim() || !newClientForm.email.trim()
+            }
           >
             {creatingClient ? <CircularProgress size={18} color="inherit" /> : "Crear"}
           </Button>
