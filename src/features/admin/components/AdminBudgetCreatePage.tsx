@@ -29,6 +29,7 @@ import { useAdminMarket } from "@/features/admin/context/AdminMarketContext";
 import { adminApiUrl } from "@/features/admin/utils/adminApi";
 import { getClientDocumentOptions, isMarketCode } from "@/shared/utils/market";
 import type { ClientDocumentType, ClientLegalType } from "@/shared/utils/userLabels";
+import { lineNetTotal } from "@/features/admin/utils/lineItemMath";
 
 interface ClientOption {
   id: string;
@@ -44,14 +45,17 @@ interface ProductOption {
   sku: string;
   name: string;
   pvpPrice: number;
+  unit: string;
 }
 
 interface LineDraft {
   key: string;
   productSku: string;
   productName: string;
+  unit: string;
   quantity: number;
   suggestedPrice: number;
+  discountPct: number;
 }
 
 interface SectionDraft {
@@ -69,8 +73,10 @@ function emptyLine(): LineDraft {
     key: newKey(),
     productSku: "",
     productName: "",
+    unit: "unidad",
     quantity: 1,
     suggestedPrice: 0,
+    discountPct: 0,
   };
 }
 
@@ -217,7 +223,9 @@ export function AdminBudgetCreatePage() {
       (sum, s) =>
         sum +
         s.materials.reduce(
-          (lineSum, m) => lineSum + m.quantity * Number(m.suggestedPrice),
+          (lineSum, m) =>
+            lineSum +
+            lineNetTotal(m.quantity, Number(m.suggestedPrice), m.discountPct),
           0,
         ),
       0,
@@ -249,13 +257,16 @@ export function AdminBudgetCreatePage() {
       updateLine(sectionIndex, lineIndex, {
         productSku: "",
         productName: "",
+        unit: "unidad",
         suggestedPrice: 0,
+        discountPct: 0,
       });
       return;
     }
     updateLine(sectionIndex, lineIndex, {
       productSku: product.sku,
       productName: product.name,
+      unit: product.unit || "unidad",
       suggestedPrice: Number(product.pvpPrice),
     });
   }
@@ -328,6 +339,8 @@ export function AdminBudgetCreatePage() {
                 productName: m.productName,
                 quantity: m.quantity,
                 suggestedPrice: m.suggestedPrice,
+                discountPct: m.discountPct,
+                unit: m.unit,
               })),
           })),
         }),
@@ -503,12 +516,19 @@ export function AdminBudgetCreatePage() {
                   value={line.quantity}
                   onChange={(e) =>
                     updateLine(sectionIndex, lineIndex, {
-                      quantity: parseInt(e.target.value, 10) || 0,
+                      quantity: parseFloat(e.target.value) || 0,
                     })
                   }
-                  inputProps={{ min: 1 }}
+                  inputProps={{ min: 0, step: "any" }}
                   sx={{ width: { md: 90 } }}
                 />
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ minWidth: 40, textAlign: "center" }}
+                >
+                  {line.unit || "—"}
+                </Typography>
                 <TextField
                   label="Precio"
                   type="number"
@@ -520,10 +540,31 @@ export function AdminBudgetCreatePage() {
                     })
                   }
                   inputProps={{ min: 0, step: 0.01 }}
-                  sx={{ width: { md: 120 } }}
+                  sx={{ width: { md: 110 } }}
+                />
+                <TextField
+                  label="Dto %"
+                  type="number"
+                  size="small"
+                  value={line.discountPct}
+                  onChange={(e) =>
+                    updateLine(sectionIndex, lineIndex, {
+                      discountPct: Math.min(
+                        100,
+                        Math.max(0, parseFloat(e.target.value) || 0),
+                      ),
+                    })
+                  }
+                  inputProps={{ min: 0, max: 100, step: 0.01 }}
+                  sx={{ width: { md: 90 } }}
                 />
                 <Typography sx={{ minWidth: 90 }} align="right">
-                  ${(line.quantity * Number(line.suggestedPrice)).toFixed(2)}
+                  $
+                  {lineNetTotal(
+                    line.quantity,
+                    Number(line.suggestedPrice),
+                    line.discountPct,
+                  ).toFixed(2)}
                 </Typography>
                 <IconButton
                   aria-label="Eliminar línea"

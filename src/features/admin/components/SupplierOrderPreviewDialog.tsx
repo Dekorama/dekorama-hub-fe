@@ -29,6 +29,7 @@ import { ResponsiveTable } from "@/shared/ui";
 export interface SupplierPreviewLine {
   lineItemId: string;
   productSku: string;
+  unit?: string;
   quantityPending: number;
   primarySupplier?: { id: string; name: string };
   factoryCode?: string;
@@ -201,11 +202,12 @@ export function SupplierOrderPreviewDialog({
                       .filter(Boolean)
                       .join(" · ")}
                   </Typography>
-                  <ResponsiveTable minWidth={480} size="small" elevation={0}>
+                  <ResponsiveTable minWidth={520} size="small" elevation={0}>
                     <TableHead>
                       <TableRow>
                         <TableCell>SKU</TableCell>
                         <TableCell>Cód. fábrica</TableCell>
+                        <TableCell>Ud</TableCell>
                         <TableCell align="right">Cant.</TableCell>
                         <TableCell align="right">Coste</TableCell>
                       </TableRow>
@@ -215,6 +217,7 @@ export function SupplierOrderPreviewDialog({
                         <TableRow key={line.lineItemId}>
                           <TableCell>{line.productSku}</TableCell>
                           <TableCell>{line.factoryCode}</TableCell>
+                          <TableCell>{line.unit || "unidad"}</TableCell>
                           <TableCell align="right">{line.quantityPending}</TableCell>
                           <TableCell align="right">
                             {formatCurrency(line.unitCost ?? 0, currency)}
@@ -222,7 +225,7 @@ export function SupplierOrderPreviewDialog({
                         </TableRow>
                       ))}
                       <TableRow>
-                        <TableCell colSpan={3} align="right">
+                        <TableCell colSpan={4} align="right">
                           <strong>Total estimado</strong>
                         </TableCell>
                         <TableCell align="right">

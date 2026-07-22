@@ -35,14 +35,18 @@ import {
 import { useAdminMarket } from "@/features/admin/context/AdminMarketContext";
 import { adminApiUrl } from "@/features/admin/utils/adminApi";
 import { readApiError } from "@/features/admin/utils/readApiError";
+import { formatQty, lineNetTotal } from "@/features/admin/utils/lineItemMath";
 import { ResponsiveTable, TableEmptyRow, TableLoadingRow } from "@/shared/ui";
 
 interface OrderLineItem {
   id: string;
   productSku: string;
+  unit: string;
   quantityOrdered: number;
   quantitySentToSupplier: number;
   unitPrice: number;
+  discountPct: number;
+  lineTotal: number;
 }
 
 interface SupplierOrderRef {
@@ -131,22 +135,44 @@ function OrderDetailRow({
         <TableHead>
           <TableRow>
             <TableCell>SKU</TableCell>
+            <TableCell>Ud</TableCell>
             <TableCell align="right">Pedido</TableCell>
+            <TableCell align="right">Dto %</TableCell>
+            <TableCell align="right">Importe</TableCell>
             <TableCell align="right">Enviado prov.</TableCell>
             <TableCell align="right">Pendiente</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
-          {(order.lineItems ?? []).map((li) => (
-            <TableRow key={li.id}>
-              <TableCell>{li.productSku}</TableCell>
-              <TableCell align="right">{li.quantityOrdered}</TableCell>
-              <TableCell align="right">{li.quantitySentToSupplier}</TableCell>
-              <TableCell align="right">
-                {li.quantityOrdered - li.quantitySentToSupplier}
-              </TableCell>
-            </TableRow>
-          ))}
+          {(order.lineItems ?? []).map((li) => {
+            const pending =
+              Number(li.quantityOrdered) - Number(li.quantitySentToSupplier);
+            const net =
+              li.lineTotal != null
+                ? Number(li.lineTotal)
+                : lineNetTotal(
+                    Number(li.quantityOrdered),
+                    Number(li.unitPrice),
+                    Number(li.discountPct) || 0,
+                  );
+            return (
+              <TableRow key={li.id}>
+                <TableCell>{li.productSku}</TableCell>
+                <TableCell>{li.unit || "unidad"}</TableCell>
+                <TableCell align="right">
+                  {formatQty(Number(li.quantityOrdered))}
+                </TableCell>
+                <TableCell align="right">
+                  {(Number(li.discountPct) || 0).toFixed(2)}
+                </TableCell>
+                <TableCell align="right">${net.toFixed(2)}</TableCell>
+                <TableCell align="right">
+                  {formatQty(Number(li.quantitySentToSupplier))}
+                </TableCell>
+                <TableCell align="right">{formatQty(pending)}</TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
 

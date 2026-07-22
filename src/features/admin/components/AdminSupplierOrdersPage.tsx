@@ -58,6 +58,7 @@ interface SupplierOrderLineItem {
   id: string;
   productSku: string;
   factoryCode: string;
+  unit: string;
   quantity: number;
   unitCost: number;
   lineTotal: number;
@@ -191,6 +192,7 @@ function OrderRow({
                   <TableRow>
                     <TableCell>SKU</TableCell>
                     <TableCell>Cód. fábrica</TableCell>
+                    <TableCell>Ud</TableCell>
                     <TableCell align="right">Cant.</TableCell>
                     <TableCell align="right">Coste u.</TableCell>
                     <TableCell align="right">Total</TableCell>
@@ -201,6 +203,7 @@ function OrderRow({
                     <TableRow key={li.id}>
                       <TableCell>{li.productSku}</TableCell>
                       <TableCell>{li.factoryCode}</TableCell>
+                      <TableCell>{li.unit || "unidad"}</TableCell>
                       <TableCell align="right">{li.quantity}</TableCell>
                       <TableCell align="right">
                         {formatCurrency(Number(li.unitCost), currency)}

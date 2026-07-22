@@ -46,14 +46,17 @@ import {
   getProposalTypeLabel,
 } from "@/shared/utils/proposalLabels";
 import { ResponsiveTable, ScrollableTabs } from "@/shared/ui";
+import { lineNetTotal } from "@/features/admin/utils/lineItemMath";
 
 interface Material {
   id: string;
   productSku: string;
   productName: string;
+  unit: string;
   quantity: number;
   orderedQuantity: number;
   suggestedPrice: number;
+  discountPct: number;
   sectionId: string | null;
 }
 
@@ -163,7 +166,19 @@ export function AdminBudgetDetailPage() {
       );
       if (p.sections?.length) setSections(p.sections);
     }
-    if (mRes.ok) setMaterials(await mRes.json());
+    if (mRes.ok) {
+      const raw = (await mRes.json()) as Material[];
+      setMaterials(
+        raw.map((m) => ({
+          ...m,
+          unit: m.unit || "unidad",
+          discountPct: Number(m.discountPct) || 0,
+          quantity: Number(m.quantity),
+          orderedQuantity: Number(m.orderedQuantity) || 0,
+          suggestedPrice: Number(m.suggestedPrice),
+        })),
+      );
+    }
     if (sRes.ok) setSections(await sRes.json());
     if (cRes.ok) setComments(await cRes.json());
     setLoading(false);
@@ -174,7 +189,10 @@ export function AdminBudgetDetailPage() {
   }, [user, id, fetchData]);
 
   const pendingMaterials = useMemo(
-    () => materials.filter((m) => (m.orderedQuantity ?? 0) < m.quantity),
+    () =>
+      materials.filter(
+        (m) => Number(m.orderedQuantity ?? 0) < Number(m.quantity),
+      ),
     [materials],
   );
 
@@ -215,8 +233,16 @@ export function AdminBudgetDetailPage() {
   }, [materials, sections]);
 
   const subtotal =
-    materials.reduce((s, m) => s + m.quantity * Number(m.suggestedPrice), 0) +
-    Number(laborCost);
+    materials.reduce(
+      (s, m) =>
+        s +
+        lineNetTotal(
+          Number(m.quantity),
+          Number(m.suggestedPrice),
+          Number(m.discountPct) || 0,
+        ),
+      0,
+    ) + Number(laborCost);
   const taxAmount = subtotal * (Number(taxRate) / 100);
   const total = subtotal + taxAmount;
 
@@ -241,6 +267,8 @@ export function AdminBudgetDetailPage() {
                 productName: m.productName,
                 quantity: m.quantity,
                 suggestedPrice: Number(m.suggestedPrice),
+                discountPct: Number(m.discountPct) || 0,
+                unit: m.unit,
               })),
             })),
         }),
@@ -518,14 +546,16 @@ export function AdminBudgetDetailPage() {
             <Typography variant="subtitle1" sx={{ mb: 1 }}>
               {group.name}
             </Typography>
-            <ResponsiveTable minWidth={640} size="small" elevation={0}>
+            <ResponsiveTable minWidth={780} size="small" elevation={0}>
               <TableHead>
                 <TableRow>
                   <TableCell>SKU</TableCell>
                   <TableCell>Producto</TableCell>
                   <TableCell>Cantidad</TableCell>
+                  <TableCell>Ud</TableCell>
                   <TableCell>Pedido</TableCell>
                   <TableCell align="right">Precio unitario</TableCell>
+                  <TableCell align="right">Dto %</TableCell>
                   <TableCell align="right">Subtotal</TableCell>
                 </TableRow>
               </TableHead>
@@ -541,13 +571,14 @@ export function AdminBudgetDetailPage() {
                         value={m.quantity}
                         onChange={(e) =>
                           updateMaterial(m.id, {
-                            quantity: parseInt(e.target.value, 10) || 0,
+                            quantity: parseFloat(e.target.value) || 0,
                           })
                         }
-                        inputProps={{ min: 1 }}
-                        sx={{ width: 80 }}
+                        inputProps={{ min: 0, step: "any" }}
+                        sx={{ width: 90 }}
                       />
                     </TableCell>
+                    <TableCell>{m.unit || "unidad"}</TableCell>
                     <TableCell>
                       {m.orderedQuantity ?? 0}/{m.quantity}
                     </TableCell>
@@ -566,13 +597,35 @@ export function AdminBudgetDetailPage() {
                       />
                     </TableCell>
                     <TableCell align="right">
-                      ${(m.quantity * Number(m.suggestedPrice)).toFixed(2)}
+                      <TextField
+                        type="number"
+                        size="small"
+                        value={m.discountPct ?? 0}
+                        onChange={(e) =>
+                          updateMaterial(m.id, {
+                            discountPct: Math.min(
+                              100,
+                              Math.max(0, parseFloat(e.target.value) || 0),
+                            ),
+                          })
+                        }
+                        inputProps={{ min: 0, max: 100, step: 0.01 }}
+                        sx={{ width: 90 }}
+                      />
+                    </TableCell>
+                    <TableCell align="right">
+                      $
+                      {lineNetTotal(
+                        Number(m.quantity),
+                        Number(m.suggestedPrice),
+                        Number(m.discountPct) || 0,
+                      ).toFixed(2)}
                     </TableCell>
                   </TableRow>
                 ))}
                 {group.materials.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} align="center">
+                    <TableCell colSpan={8} align="center">
                       Sin líneas
                     </TableCell>
                   </TableRow>
@@ -739,7 +792,8 @@ export function AdminBudgetDetailPage() {
             />
             <Divider />
             {pendingMaterials.map((m) => {
-              const remaining = m.quantity - (m.orderedQuantity ?? 0);
+              const remaining =
+                Number(m.quantity) - Number(m.orderedQuantity ?? 0);
               return (
                 <FormControlLabel
                   key={m.id}
@@ -755,7 +809,7 @@ export function AdminBudgetDetailPage() {
                       }}
                     />
                   }
-                  label={`${m.productSku} — ${m.productName} (×${remaining})`}
+                  label={`${m.productSku} — ${m.productName} (×${remaining} ${m.unit || "ud"})`}
                 />
               );
             })}
