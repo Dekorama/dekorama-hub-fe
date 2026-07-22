@@ -109,6 +109,14 @@ function OrderDetailRow({
 
       <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
         <Button
+          component={Link}
+          href={`/admin/pedidos/${order.id}`}
+          variant="outlined"
+          size="small"
+        >
+          Editar
+        </Button>
+        <Button
           variant="contained"
           size="small"
           onClick={() => onGeneratePos(order.id)}
@@ -302,7 +310,9 @@ export function AdminOrdersPage() {
                         {expanded ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
                       </IconButton>
                     </TableCell>
-                    <TableCell>{o.orderNumber}</TableCell>
+                    <TableCell>
+                      <Link href={`/admin/pedidos/${o.id}`}>{o.orderNumber}</Link>
+                    </TableCell>
                     <TableCell>{o.client?.name ?? o.client?.email}</TableCell>
                     <TableCell>{formatClientOrderStatus(o.status)}</TableCell>
                     <TableCell>{formatOrderTotal(o.total, o.lineItems)}</TableCell>

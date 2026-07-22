@@ -56,6 +56,8 @@ interface LineDraft {
   quantity: number;
   suggestedPrice: number;
   discountPct: number;
+  externalComment: string;
+  internalComment: string;
 }
 
 interface SectionDraft {
@@ -77,6 +79,8 @@ function emptyLine(): LineDraft {
     quantity: 1,
     suggestedPrice: 0,
     discountPct: 0,
+    externalComment: "",
+    internalComment: "",
   };
 }
 
@@ -341,6 +345,8 @@ export function AdminBudgetCreatePage() {
                 suggestedPrice: m.suggestedPrice,
                 discountPct: m.discountPct,
                 unit: m.unit,
+                externalComment: m.externalComment || undefined,
+                internalComment: m.internalComment || undefined,
               })),
           })),
         }),
@@ -492,8 +498,8 @@ export function AdminBudgetCreatePage() {
 
           <Stack spacing={1.5}>
             {section.materials.map((line, lineIndex) => (
+              <Stack key={line.key} spacing={1}>
               <Stack
-                key={line.key}
                 direction={{ xs: "column", md: "row" }}
                 spacing={1}
                 alignItems={{ md: "center" }}
@@ -577,6 +583,31 @@ export function AdminBudgetCreatePage() {
                 >
                   <DeleteIcon fontSize="small" />
                 </IconButton>
+              </Stack>
+              <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
+                <TextField
+                  label="Comentario externo"
+                  size="small"
+                  fullWidth
+                  value={line.externalComment}
+                  onChange={(e) =>
+                    updateLine(sectionIndex, lineIndex, {
+                      externalComment: e.target.value,
+                    })
+                  }
+                />
+                <TextField
+                  label="Comentario interno"
+                  size="small"
+                  fullWidth
+                  value={line.internalComment}
+                  onChange={(e) =>
+                    updateLine(sectionIndex, lineIndex, {
+                      internalComment: e.target.value,
+                    })
+                  }
+                />
+              </Stack>
               </Stack>
             ))}
           </Stack>

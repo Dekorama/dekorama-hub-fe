@@ -30,6 +30,7 @@ interface Material {
   productName: string;
   quantity: number;
   suggestedPrice?: number;
+  externalComment?: string | null;
 }
 
 interface Proposal {
@@ -216,6 +217,7 @@ export function SolicitudDetailPage() {
               <TableCell>Producto</TableCell>
               <TableCell>SKU</TableCell>
               <TableCell>Cant.</TableCell>
+              <TableCell>Comentario</TableCell>
               {showPrices && <TableCell align="right">Precio</TableCell>}
             </TableRow>
           </TableHead>
@@ -225,6 +227,7 @@ export function SolicitudDetailPage() {
                 <TableCell>{m.productName}</TableCell>
                 <TableCell>{m.productSku}</TableCell>
                 <TableCell>{m.quantity}</TableCell>
+                <TableCell>{m.externalComment || "—"}</TableCell>
                 {showPrices && (
                   <TableCell align="right">
                     ${Number(m.suggestedPrice ?? 0).toFixed(2)}

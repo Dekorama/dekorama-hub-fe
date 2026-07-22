@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, Fragment } from "react";
 import { useParams } from "next/navigation";
 import {
   Alert,
@@ -58,6 +58,8 @@ interface Material {
   suggestedPrice: number;
   discountPct: number;
   sectionId: string | null;
+  externalComment?: string | null;
+  internalComment?: string | null;
 }
 
 interface Section {
@@ -269,6 +271,8 @@ export function AdminBudgetDetailPage() {
                 suggestedPrice: Number(m.suggestedPrice),
                 discountPct: Number(m.discountPct) || 0,
                 unit: m.unit,
+                externalComment: m.externalComment || null,
+                internalComment: m.internalComment || null,
               })),
             })),
         }),
@@ -561,7 +565,8 @@ export function AdminBudgetDetailPage() {
               </TableHead>
               <TableBody>
                 {group.materials.map((m) => (
-                  <TableRow key={m.id}>
+                  <Fragment key={m.id}>
+                  <TableRow>
                     <TableCell>{m.productSku}</TableCell>
                     <TableCell>{m.productName}</TableCell>
                     <TableCell>
@@ -622,6 +627,35 @@ export function AdminBudgetDetailPage() {
                       ).toFixed(2)}
                     </TableCell>
                   </TableRow>
+                  <TableRow>
+                    <TableCell colSpan={8} sx={{ borderTop: 0, pt: 0 }}>
+                      <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
+                        <TextField
+                          label="Comentario externo"
+                          size="small"
+                          fullWidth
+                          value={m.externalComment ?? ""}
+                          onChange={(e) =>
+                            updateMaterial(m.id, {
+                              externalComment: e.target.value,
+                            })
+                          }
+                        />
+                        <TextField
+                          label="Comentario interno"
+                          size="small"
+                          fullWidth
+                          value={m.internalComment ?? ""}
+                          onChange={(e) =>
+                            updateMaterial(m.id, {
+                              internalComment: e.target.value,
+                            })
+                          }
+                        />
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                  </Fragment>
                 ))}
                 {group.materials.length === 0 && (
                   <TableRow>
