@@ -31,7 +31,7 @@ import { adminApiUrl } from "@/features/admin/utils/adminApi";
 import { readApiError } from "@/features/admin/utils/readApiError";
 import { LabeledSelect } from "@/shared/components/LabeledSelect";
 import { AdminPageHeader } from "@/features/admin/components/AdminPageHeader";
-import { ConfirmDialog, PageToolbar, ResponsiveTable, TableEmptyRow, TableLoadingRow } from "@/shared/ui";
+import { ConfirmDialog, PageToolbar, ResponsiveTable, TableEmptyRow, TableLoadingRow, ClearableNumberField } from "@/shared/ui";
 
 type PricingMode = "neto" | "pvp";
 type FinishType = "decorado" | "pieza_lisa";
@@ -410,7 +410,7 @@ export function AdminProductsPage() {
       return;
     }
     if (isM2Unit(formUnit) && (formPiecesPerBox < 1 || formUnitPerPiece <= 0)) {
-      showWarning("Unidad m2: indica piezas por caja y cobertura por pieza");
+      showWarning("Unidad m2: indica piezas por caja y cobertura por caja (m²)");
       return;
     }
 
@@ -545,7 +545,7 @@ export function AdminProductsPage() {
           return;
         }
         if (isM2Unit(formUnit) && (formPiecesPerBox < 1 || formUnitPerPiece <= 0)) {
-          showError("Unidad m2: indica piezas por caja y cobertura por pieza");
+          showError("Unidad m2: indica piezas por caja y cobertura por caja (m²)");
           return;
         }
         const familyCode = wizFamily.code || formFamily;
@@ -643,10 +643,6 @@ export function AdminProductsPage() {
     suppliers.find((s) => s.id === formSupplierId);
   const skuPreviewPrefix = selectedSupplier?.prefix?.toUpperCase() ?? null;
   const formIsM2 = isM2Unit(formUnit);
-  const calculatedUnitPerBox =
-    formIsM2 && formPiecesPerBox > 0 && formUnitPerPiece > 0
-      ? formPiecesPerBox * formUnitPerPiece
-      : 0;
 
   const saveDisabled =
     saving ||
@@ -666,7 +662,7 @@ export function AdminProductsPage() {
     : formProfitMargin > MAX_PROFIT_MARGIN
       ? `Margen máximo ${MAX_PROFIT_MARGIN}%`
       : formIsM2 && (formPiecesPerBox < 1 || formUnitPerPiece <= 0)
-        ? "m2: piezas/caja y cobertura/pieza"
+        ? "m2: piezas/caja y cobertura/caja"
         : null;
 
   return (
@@ -911,23 +907,17 @@ export function AdminProductsPage() {
             </LabeledSelect>
             {formPricingMode === "neto" ? (
               <>
-                <TextField
+                <ClearableNumberField
                   label="Costo / Neto"
-                  type="number"
                   value={formFactoryCost}
-                  onChange={(e) =>
-                    setFormFactoryCost(parseFloat(e.target.value) || 0)
-                  }
+                  onValueChange={setFormFactoryCost}
                   required
                   fullWidth
                 />
-                <TextField
+                <ClearableNumberField
                   label="Margen de ganancia (%)"
-                  type="number"
                   value={formProfitMargin}
-                  onChange={(e) =>
-                    setFormProfitMargin(parseFloat(e.target.value) || 0)
-                  }
+                  onValueChange={setFormProfitMargin}
                   required
                   fullWidth
                   inputProps={{ min: 0, max: MAX_PROFIT_MARGIN }}
@@ -940,22 +930,18 @@ export function AdminProductsPage() {
               </>
             ) : (
               <>
-                <TextField
+                <ClearableNumberField
                   label="PVP"
-                  type="number"
                   value={formPvpPrice}
-                  onChange={(e) => setFormPvpPrice(parseFloat(e.target.value) || 0)}
+                  onValueChange={setFormPvpPrice}
                   required
                   fullWidth
                   inputProps={{ min: 0, step: 0.01 }}
                 />
-                <TextField
+                <ClearableNumberField
                   label="Margen de ganancia (%)"
-                  type="number"
                   value={formProfitMargin}
-                  onChange={(e) =>
-                    setFormProfitMargin(parseFloat(e.target.value) || 0)
-                  }
+                  onValueChange={setFormProfitMargin}
                   required
                   fullWidth
                   inputProps={{ min: 0, max: MAX_PROFIT_MARGIN }}
@@ -980,47 +966,33 @@ export function AdminProductsPage() {
                 <Typography variant="subtitle2" color="text.secondary">
                   Empaque m²
                 </Typography>
-                <TextField
+                <ClearableNumberField
                   label="Piezas por caja"
-                  type="number"
-                  value={formPiecesPerBox || ""}
-                  onChange={(e) =>
-                    setFormPiecesPerBox(parseInt(e.target.value, 10) || 0)
-                  }
+                  value={formPiecesPerBox}
+                  onValueChange={setFormPiecesPerBox}
+                  integer
                   required
                   fullWidth
                   inputProps={{ min: 1, step: 1 }}
+                  helperText="Cuántas piezas vienen en cada caja"
                 />
-                <TextField
-                  label="Cobertura por pieza (m²)"
-                  type="number"
-                  value={formUnitPerPiece || ""}
-                  onChange={(e) =>
-                    setFormUnitPerPiece(parseFloat(e.target.value) || 0)
-                  }
+                <ClearableNumberField
+                  label="Cobertura por caja (m²)"
+                  value={formUnitPerPiece}
+                  onValueChange={setFormUnitPerPiece}
                   required
                   fullWidth
                   inputProps={{ min: 0, step: 0.0001 }}
-                  helperText="Cuánto abarca una pieza en m²"
+                  helperText="m² totales que cubre una caja completa (ej. 1,44)"
                 />
-                <Paper sx={{ p: 2, bgcolor: "grey.100" }}>
-                  <Typography variant="body2" color="text.secondary">
-                    m² por caja:{" "}
-                    {calculatedUnitPerBox > 0
-                      ? calculatedUnitPerBox.toFixed(4)
-                      : "—"}
-                  </Typography>
-                </Paper>
               </>
             )}
             {!isSpainMarket && (
-              <TextField
+              <ClearableNumberField
                 label="Stock inicial"
-                type="number"
                 value={formStock}
-                onChange={(e) =>
-                  setFormStock(parseInt(e.target.value, 10) || 0)
-                }
+                onValueChange={setFormStock}
+                integer
                 fullWidth
                 inputProps={{ min: 0 }}
               />
@@ -1222,16 +1194,16 @@ export function AdminProductsPage() {
               </LabeledSelect>
               {formPricingMode === "neto" ? (
                 <>
-                  <TextField label="Coste / Neto" type="number" value={formFactoryCost} onChange={(e) => setFormFactoryCost(parseFloat(e.target.value) || 0)} fullWidth />
-                  <TextField label="Margen %" type="number" value={formProfitMargin} onChange={(e) => setFormProfitMargin(parseFloat(e.target.value) || 0)} fullWidth inputProps={{ min: 0, max: MAX_PROFIT_MARGIN }} />
+                  <ClearableNumberField label="Coste / Neto" value={formFactoryCost} onValueChange={setFormFactoryCost} fullWidth />
+                  <ClearableNumberField label="Margen %" value={formProfitMargin} onValueChange={setFormProfitMargin} fullWidth inputProps={{ min: 0, max: MAX_PROFIT_MARGIN }} />
                   <Typography variant="body2" color="text.secondary">
                     PVP calculado: ${calculatedPVP.toFixed(2)}
                   </Typography>
                 </>
               ) : (
                 <>
-                  <TextField label="PVP" type="number" value={formPvpPrice} onChange={(e) => setFormPvpPrice(parseFloat(e.target.value) || 0)} fullWidth />
-                  <TextField label="Margen %" type="number" value={formProfitMargin} onChange={(e) => setFormProfitMargin(parseFloat(e.target.value) || 0)} fullWidth inputProps={{ min: 0, max: MAX_PROFIT_MARGIN }} />
+                  <ClearableNumberField label="PVP" value={formPvpPrice} onValueChange={setFormPvpPrice} fullWidth />
+                  <ClearableNumberField label="Margen %" value={formProfitMargin} onValueChange={setFormProfitMargin} fullWidth inputProps={{ min: 0, max: MAX_PROFIT_MARGIN }} />
                   <Typography variant="body2" color="text.secondary">
                     Costo de compra calculado: ${calculatedFactoryCost.toFixed(2)}
                   </Typography>
@@ -1246,38 +1218,29 @@ export function AdminProductsPage() {
               />
               {formIsM2 && (
                 <>
-                  <TextField
+                  <ClearableNumberField
                     label="Piezas por caja"
-                    type="number"
-                    value={formPiecesPerBox || ""}
-                    onChange={(e) =>
-                      setFormPiecesPerBox(parseInt(e.target.value, 10) || 0)
-                    }
+                    value={formPiecesPerBox}
+                    onValueChange={setFormPiecesPerBox}
+                    integer
                     required
                     fullWidth
                     inputProps={{ min: 1, step: 1 }}
+                    helperText="Cuántas piezas vienen en cada caja"
                   />
-                  <TextField
-                    label="Cobertura por pieza (m²)"
-                    type="number"
-                    value={formUnitPerPiece || ""}
-                    onChange={(e) =>
-                      setFormUnitPerPiece(parseFloat(e.target.value) || 0)
-                    }
+                  <ClearableNumberField
+                    label="Cobertura por caja (m²)"
+                    value={formUnitPerPiece}
+                    onValueChange={setFormUnitPerPiece}
                     required
                     fullWidth
                     inputProps={{ min: 0, step: 0.0001 }}
+                    helperText="m² totales que cubre una caja completa (ej. 1,44)"
                   />
-                  <Typography variant="body2" color="text.secondary">
-                    m² por caja:{" "}
-                    {calculatedUnitPerBox > 0
-                      ? calculatedUnitPerBox.toFixed(4)
-                      : "—"}
-                  </Typography>
                 </>
               )}
               {!isSpainMarket && (
-                <TextField label="Stock" type="number" value={formStock} onChange={(e) => setFormStock(parseInt(e.target.value, 10) || 0)} fullWidth />
+                <ClearableNumberField label="Stock" value={formStock} onValueChange={setFormStock} integer fullWidth />
               )}
             </Stack>
           )}

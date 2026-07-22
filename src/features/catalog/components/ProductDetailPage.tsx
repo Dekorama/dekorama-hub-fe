@@ -160,7 +160,7 @@ export function ProductDetailPage() {
                 product.unitPerPiece != null &&
                 " · "}
               {product.unitPerPiece != null &&
-                `Cobertura/pieza: ${product.unitPerPiece}`}
+                `Cobertura/caja: ${product.unitPerPiece} m²`}
             </Typography>
           )}
 

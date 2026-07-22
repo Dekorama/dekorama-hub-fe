@@ -38,22 +38,19 @@ export function displayUnitLabel(unit?: string | null): string {
   return u;
 }
 
-/** m² per box from product packaging; null if incomplete. */
+/**
+ * m² per box from product packaging.
+ * `unitPerPiece` column = cobertura por caja (m²/caja), not per piece.
+ */
 export function m2PerBox(
   piecesPerBox?: number | null,
-  unitPerPiece?: number | null,
+  coveragePerBox?: number | null,
 ): number | null {
   const pieces = Number(piecesPerBox);
-  const perPiece = Number(unitPerPiece);
-  if (
-    !Number.isFinite(pieces) ||
-    !Number.isFinite(perPiece) ||
-    pieces <= 0 ||
-    perPiece <= 0
-  ) {
-    return null;
-  }
-  return pieces * perPiece;
+  const perBox = Number(coveragePerBox);
+  if (!Number.isFinite(pieces) || pieces < 1) return null;
+  if (!Number.isFinite(perBox) || perBox <= 0) return null;
+  return perBox;
 }
 
 /** Box count for a given m² quantity (ceil). */
@@ -76,6 +73,7 @@ export function roundM2ToFullBoxes(
 
 export type ProductPackaging = {
   piecesPerBox: number | null;
+  /** Cobertura por caja (m²/caja). Column name: unitPerPiece. */
   unitPerPiece: number | null;
 };
 

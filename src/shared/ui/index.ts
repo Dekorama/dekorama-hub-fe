@@ -5,3 +5,5 @@ export { TableLoadingRow } from "./TableLoadingRow";
 export { TableEmptyRow } from "./TableEmptyRow";
 export { ConfirmDialog } from "./ConfirmDialog";
 export type { ConfirmDialogProps } from "./ConfirmDialog";
+export { ClearableNumberField } from "./ClearableNumberField";
+

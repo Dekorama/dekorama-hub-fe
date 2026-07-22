@@ -45,7 +45,7 @@ import {
   getProposalStatusLabel,
   getProposalTypeLabel,
 } from "@/shared/utils/proposalLabels";
-import { PageToolbar, ResponsiveTable, ScrollableTabs } from "@/shared/ui";
+import { PageToolbar, ResponsiveTable, ScrollableTabs, ClearableNumberField } from "@/shared/ui";
 import {
   displayUnitLabel,
   lineNetTotal,
@@ -553,21 +553,19 @@ export function AdminBudgetDetailPage() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
             />
-            <TextField
+            <ClearableNumberField
               label={`${config.taxLabel} %`}
-              type="number"
               size="small"
               value={taxRate}
-              onChange={(e) => setTaxRate(parseFloat(e.target.value) || 0)}
+              onValueChange={setTaxRate}
               inputProps={{ min: 0, step: 0.01 }}
               sx={{ width: { sm: 140 } }}
             />
-            <TextField
+            <ClearableNumberField
               label="Mano de obra"
-              type="number"
               size="small"
               value={laborCost}
-              onChange={(e) => setLaborCost(parseFloat(e.target.value) || 0)}
+              onValueChange={setLaborCost}
               inputProps={{ min: 0, step: 0.01 }}
               sx={{ width: { sm: 160 } }}
             />

@@ -15,6 +15,7 @@ import {
 } from "@mui/material";
 import CommentOutlinedIcon from "@mui/icons-material/CommentOutlined";
 import DeleteIcon from "@mui/icons-material/Delete";
+import { ClearableNumberField } from "@/shared/ui";
 import {
   boxesForM2,
   displayUnitLabel,
@@ -87,14 +88,11 @@ export function BudgetLineRow({
       <TableRow>
         {leadingCells}
         <TableCell sx={{ verticalAlign: "top", minWidth: 110 }}>
-          <TextField
+          <ClearableNumberField
             label={m2Mode ? "m²" : "Cant."}
-            type="number"
             size="small"
             value={line.quantity}
-            onChange={(e) =>
-              onChange({ quantity: parseFloat(e.target.value) || 0 })
-            }
+            onValueChange={(quantity) => onChange({ quantity })}
             inputProps={{ min: 0, step: "any" }}
             sx={{ width: 100 }}
           />
@@ -106,6 +104,9 @@ export function BudgetLineRow({
                   : "Sin cantidad"}
                 {" · "}
                 {formatQty(perBox)} m²/caja
+                {line.piecesPerBox != null && line.piecesPerBox > 0
+                  ? ` · ${line.piecesPerBox} pz`
+                  : ""}
               </Typography>
               {canAdjustBoxes && (
                 <Button
@@ -120,7 +121,7 @@ export function BudgetLineRow({
           )}
           {m2Mode && perBox === null && (
             <Typography variant="caption" color="warning.main" display="block" sx={{ mt: 0.5 }}>
-              Sin packaging (piezas/caja)
+              Sin packaging (piezas + m²/caja)
             </Typography>
           )}
         </TableCell>
@@ -129,30 +130,23 @@ export function BudgetLineRow({
         </TableCell>
         {afterUnitCell}
         <TableCell align="right" sx={{ verticalAlign: "top" }}>
-          <TextField
+          <ClearableNumberField
             label="Precio"
-            type="number"
             size="small"
             value={line.suggestedPrice}
-            onChange={(e) =>
-              onChange({ suggestedPrice: parseFloat(e.target.value) || 0 })
-            }
+            onValueChange={(suggestedPrice) => onChange({ suggestedPrice })}
             inputProps={{ min: 0, step: 0.01 }}
             sx={{ width: 110 }}
           />
         </TableCell>
         <TableCell align="right" sx={{ verticalAlign: "top" }}>
-          <TextField
+          <ClearableNumberField
             label="Dto %"
-            type="number"
             size="small"
             value={line.discountPct}
-            onChange={(e) =>
+            onValueChange={(n) =>
               onChange({
-                discountPct: Math.min(
-                  100,
-                  Math.max(0, parseFloat(e.target.value) || 0),
-                ),
+                discountPct: Math.min(100, Math.max(0, n)),
               })
             }
             inputProps={{ min: 0, max: 100, step: 0.01 }}

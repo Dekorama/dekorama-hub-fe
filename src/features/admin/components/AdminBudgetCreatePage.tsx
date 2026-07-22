@@ -41,7 +41,7 @@ import {
   normalizeUnit,
   parsePackaging,
 } from "@/features/admin/utils/lineItemMath";
-import { PageToolbar, ResponsiveTable } from "@/shared/ui";
+import { PageToolbar, ResponsiveTable, ClearableNumberField } from "@/shared/ui";
 import {
   BudgetLineRow,
   type BudgetLineEditable,
@@ -478,21 +478,19 @@ export function AdminBudgetCreatePage() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
-          <TextField
+          <ClearableNumberField
             label={`${config.taxLabel} %`}
-            type="number"
             size="small"
             value={taxRate}
-            onChange={(e) => setTaxRate(parseFloat(e.target.value) || 0)}
+            onValueChange={setTaxRate}
             inputProps={{ min: 0, step: 0.01 }}
             sx={{ width: { sm: 140 } }}
           />
-          <TextField
+          <ClearableNumberField
             label="Mano de obra"
-            type="number"
             size="small"
             value={laborCost}
-            onChange={(e) => setLaborCost(parseFloat(e.target.value) || 0)}
+            onValueChange={setLaborCost}
             inputProps={{ min: 0, step: 0.01 }}
             sx={{ width: { sm: 160 } }}
           />
@@ -775,15 +773,14 @@ export function AdminBudgetCreatePage() {
               <MenuItem value="yes">Sí</MenuItem>
             </TextField>
             {!newClient.taxExempt && (
-              <TextField
+              <ClearableNumberField
                 label={`${config.taxLabel} %`}
-                type="number"
                 size="small"
                 value={newClient.taxRate}
-                onChange={(e) =>
+                onValueChange={(taxRate) =>
                   setNewClient((c) => ({
                     ...c,
-                    taxRate: parseFloat(e.target.value) || 0,
+                    taxRate,
                   }))
                 }
               />
