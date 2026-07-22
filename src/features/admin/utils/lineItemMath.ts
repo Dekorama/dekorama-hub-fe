@@ -53,10 +53,14 @@ export function m2PerBox(
   return perBox;
 }
 
-/** Box count for a given m² quantity (ceil). */
+/** Box count for a given m² quantity (ceil). Tolerates float noise on exact multiples. */
 export function boxesForM2(quantityM2: number, m2PerBoxValue: number): number {
   if (m2PerBoxValue <= 0) return 0;
-  return Math.ceil(Number(quantityM2) / m2PerBoxValue);
+  const ratio = Number(quantityM2) / m2PerBoxValue;
+  if (!Number.isFinite(ratio) || ratio <= 0) return 0;
+  const nearest = Math.round(ratio);
+  if (Math.abs(ratio - nearest) < 1e-9) return Math.max(0, nearest);
+  return Math.ceil(ratio);
 }
 
 /** Round m² up to exact full-box coverage. */
