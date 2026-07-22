@@ -29,7 +29,7 @@ interface Material {
   productSku: string;
   productName: string;
   quantity: number;
-  suggestedPrice: number;
+  suggestedPrice?: number;
 }
 
 interface Proposal {
@@ -164,9 +164,15 @@ export function SolicitudDetailPage() {
 
   if (loading || !proposal) return null;
 
-  const total =
-    materials.reduce((s, m) => s + m.quantity * Number(m.suggestedPrice), 0) +
-    Number(proposal.laborCost);
+  const showPrices =
+    proposal.status === "proforma_ready" || proposal.status === "signed";
+
+  const total = showPrices
+    ? materials.reduce(
+        (s, m) => s + m.quantity * Number(m.suggestedPrice ?? 0),
+        0,
+      ) + Number(proposal.laborCost)
+    : 0;
 
   return (
     <Box sx={{ p: 3 }}>
@@ -178,6 +184,12 @@ export function SolicitudDetailPage() {
           color={getProposalStatusColor(proposal.status)}
         />
       </Stack>
+
+      {proposal.status === "solicitud_submitted" && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Solicitud recibida. Dekorama está preparando tu proforma con precios.
+        </Alert>
+      )}
 
       {proposal.status === "proforma_ready" && (
         <Alert severity="info" sx={{ mb: 2 }}>
@@ -204,7 +216,7 @@ export function SolicitudDetailPage() {
               <TableCell>Producto</TableCell>
               <TableCell>SKU</TableCell>
               <TableCell>Cant.</TableCell>
-              <TableCell align="right">Precio</TableCell>
+              {showPrices && <TableCell align="right">Precio</TableCell>}
             </TableRow>
           </TableHead>
           <TableBody>
@@ -213,14 +225,29 @@ export function SolicitudDetailPage() {
                 <TableCell>{m.productName}</TableCell>
                 <TableCell>{m.productSku}</TableCell>
                 <TableCell>{m.quantity}</TableCell>
-                <TableCell align="right">${Number(m.suggestedPrice).toFixed(2)}</TableCell>
+                {showPrices && (
+                  <TableCell align="right">
+                    ${Number(m.suggestedPrice ?? 0).toFixed(2)}
+                  </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>
         </ResponsiveTable>
-        <Typography sx={{ mt: 2, fontWeight: "bold" }} align="right">
-          Total: ${total.toFixed(2)}
-        </Typography>
+        {showPrices ? (
+          <Typography sx={{ mt: 2, fontWeight: "bold" }} align="right">
+            Total: ${total.toFixed(2)}
+          </Typography>
+        ) : (
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ mt: 2 }}
+            align="right"
+          >
+            Precios disponibles cuando la proforma esté lista
+          </Typography>
+        )}
       </Paper>
 
       <Paper sx={{ p: 2, mb: 2 }}>

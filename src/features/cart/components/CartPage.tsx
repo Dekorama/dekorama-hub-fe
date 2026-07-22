@@ -26,14 +26,12 @@ import {
 import { Delete, Send, ShoppingCart } from "@mui/icons-material";
 import { useCurrentUser, API } from "@/features/auth/hooks/useCurrentUser";
 import { useAppSnackbar } from "@/shared/hooks/useAppSnackbar";
-import { getMarketConfig } from "@/shared/utils/market";
 import { notifyCartUpdated } from "@/shared/utils/cartEvents";
 import { ConfirmDialog, ResponsiveTable } from "@/shared/ui";
 
 interface CartProduct {
   sku: string;
   name: string;
-  pvpPrice: number;
   familyName: string;
   imageUrl: string | null;
 }
@@ -42,18 +40,13 @@ interface CartItem {
   id: string;
   productSku: string;
   quantity: number;
-  unitPrice: number;
   product: CartProduct | null;
 }
-
-const IVA_RATE = 0.16;
 
 function CartPageContent() {
   const searchParams = useSearchParams();
   const projectId = searchParams.get("projectId");
   const { user, loading: authLoading } = useCurrentUser();
-  const market = user ? getMarketConfig(user.country) : null;
-  const taxRate = market ? market.taxRate / 100 : IVA_RATE;
 
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,7 +72,7 @@ function CartPageContent() {
   };
 
   useEffect(() => {
-    if (user) fetchCart();
+    if (user) void fetchCart();
   }, [user]);
 
   const handleUpdateQuantity = async (itemId: string, newQuantity: number) => {
@@ -151,7 +144,9 @@ function CartPageContent() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error((err as { message?: string }).message ?? "Error al enviar solicitud");
+        throw new Error(
+          (err as { message?: string }).message ?? "Error al enviar solicitud",
+        );
       }
       setCartItems([]);
       setMessage("");
@@ -179,206 +174,237 @@ function CartPageContent() {
 
   if (!user) return null;
 
-  const subtotal = cartItems.reduce((sum, item) => sum + +item.unitPrice * item.quantity, 0);
-  const iva = subtotal * taxRate;
-  const total = subtotal + iva;
-
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 8 }}>
-        <Paper elevation={3} sx={{ p: 4 }}>
-          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 3 }}>
-            <Typography variant="h5">
-              <ShoppingCart sx={{ verticalAlign: "middle", mr: 1 }} />
-              Mi Carrito
-            </Typography>
-            {cartItems.length > 0 && (
-              <Button variant="outlined" color="error" onClick={() => setClearCartOpen(true)}>
-                Vaciar Carrito
-              </Button>
-            )}
-          </Box>
-
-          {projectId && (
-            <Alert severity="info" sx={{ mb: 2 }}>
-              Esta solicitud se vinculará al proyecto seleccionado.
-            </Alert>
-          )}
-
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          )}
-
-          {cartItems.length === 0 ? (
-            <Alert severity="info">
-              Tu carrito está vacío. Agrega productos desde{" "}
-              <Link href="/proyectos">tus proyectos</Link> o explora el catálogo Dekorama.
-            </Alert>
-          ) : (
-            <>
-              <ResponsiveTable minWidth={720} elevation={0} paperSx={{ boxShadow: "none" }}>
-                <TableHead>
-                    <TableRow>
-                      <TableCell>Producto</TableCell>
-                      <TableCell>SKU</TableCell>
-                      <TableCell align="right">Precio Unitario</TableCell>
-                      <TableCell align="center">Cantidad</TableCell>
-                      <TableCell align="right">Subtotal</TableCell>
-                      <TableCell align="center">Acciones</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {cartItems.map((item) => {
-                      const productName = item.product?.name ?? item.productSku;
-                      const productSku = item.product?.sku ?? item.productSku;
-                      const familyName = item.product?.familyName;
-
-                      return (
-                        <TableRow key={item.id}>
-                          <TableCell>
-                            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                              {item.product?.imageUrl && (
-                                <img
-                                  src={item.product.imageUrl}
-                                  alt={productName}
-                                  style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 4 }}
-                                />
-                              )}
-                              <Box>
-                                <Typography variant="body1">{productName}</Typography>
-                                {familyName && (
-                                  <Typography variant="caption" color="text.secondary">
-                                    {familyName}
-                                  </Typography>
-                                )}
-                                {!item.product && (
-                                  <Typography variant="caption" color="warning.main" display="block">
-                                    Producto no disponible en catálogo
-                                  </Typography>
-                                )}
-                              </Box>
-                            </Box>
-                          </TableCell>
-                          <TableCell>{productSku}</TableCell>
-                          <TableCell align="right">${(+item.unitPrice).toFixed(2)}</TableCell>
-                          <TableCell align="center">
-                            <TextField
-                              type="number"
-                              value={item.quantity}
-                              onChange={(e) => {
-                                const newQty = parseInt(e.target.value, 10) || 1;
-                                handleUpdateQuantity(item.id, newQty);
-                              }}
-                              inputProps={{ min: 1, style: { textAlign: "center" } }}
-                              size="small"
-                              sx={{ width: 80 }}
-                            />
-                          </TableCell>
-                          <TableCell align="right">
-                            <Typography variant="body1" fontWeight="bold">
-                              ${(+item.unitPrice * item.quantity).toFixed(2)}
-                            </Typography>
-                          </TableCell>
-                          <TableCell align="center">
-                            <IconButton color="error" onClick={() => setRemoveItemId(item.id)}>
-                              <Delete />
-                            </IconButton>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-              </ResponsiveTable>
-
-              <Divider sx={{ my: 3 }} />
-
-              <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-                <Box sx={{ width: { xs: "100%", sm: 300 } }}>
-                  <TextField
-                    label="Mensaje para Dekorama (opcional)"
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    multiline
-                    minRows={2}
-                    fullWidth
-                    size="small"
-                    sx={{ mb: 2 }}
-                  />
-                  <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
-                    <Typography variant="body1">Subtotal:</Typography>
-                    <Typography variant="body1">${subtotal.toFixed(2)}</Typography>
-                  </Box>
-                  <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
-                    <Typography variant="body1">{market?.taxLabel ?? "IVA"} ({market?.taxRate ?? 16}%):</Typography>
-                    <Typography variant="body1">${iva.toFixed(2)}</Typography>
-                  </Box>
-                  <Divider sx={{ my: 1 }} />
-                  <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
-                    <Typography variant="h6">Total:</Typography>
-                    <Typography variant="h6" color="primary">
-                      ${total.toFixed(2)}
-                    </Typography>
-                  </Box>
-                  <Button
-                    variant="contained"
-                    fullWidth
-                    size="large"
-                    startIcon={<Send />}
-                    onClick={handleSubmitSolicitud}
-                    disabled={submitting}
-                  >
-                    {submitting ? "Enviando..." : "Enviar Solicitud"}
-                  </Button>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1, textAlign: "center" }}>
-                    Dekorama preparará tu proforma y te la enviará por email
-                  </Typography>
-                </Box>
-              </Box>
-            </>
-          )}
-        </Paper>
-
-        <Dialog open={successDialogOpen} onClose={() => { setSuccessDialogOpen(false); window.location.href = "/solicitudes"; }}>
-          <DialogTitle>Solicitud enviada</DialogTitle>
-          <DialogContent>
-            <Typography variant="body1">
-              Tu solicitud fue enviada. El equipo Dekorama preparará tu proforma y te notificará cuando esté lista.
-            </Typography>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => { window.location.href = "/solicitudes"; }} variant="contained">
-              Ver mis solicitudes
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        <ConfirmDialog
-          open={!!removeItemId}
-          title="Eliminar producto"
-          message="¿Eliminar este producto del carrito?"
-          confirmLabel="Eliminar"
-          confirmColor="error"
-          onCancel={() => setRemoveItemId(null)}
-          onConfirm={() => {
-            const id = removeItemId;
-            setRemoveItemId(null);
-            if (id) void handleRemoveItem(id);
+      <Paper elevation={3} sx={{ p: 4 }}>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            mb: 3,
           }}
-        />
+        >
+          <Typography variant="h5">
+            <ShoppingCart sx={{ verticalAlign: "middle", mr: 1 }} />
+            Mi Carrito
+          </Typography>
+          {cartItems.length > 0 && (
+            <Button
+              variant="outlined"
+              color="error"
+              onClick={() => setClearCartOpen(true)}
+            >
+              Vaciar Carrito
+            </Button>
+          )}
+        </Box>
 
-        <ConfirmDialog
-          open={clearCartOpen}
-          title="Vaciar carrito"
-          message="¿Vaciar todo el carrito?"
-          confirmLabel="Vaciar"
-          confirmColor="error"
-          onCancel={() => setClearCartOpen(false)}
-          onConfirm={() => void handleClearCartConfirm()}
-        />
+        {projectId && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Esta solicitud se vinculará al proyecto seleccionado.
+          </Alert>
+        )}
 
-        <SnackbarHost />
-      </Container>
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+
+        {cartItems.length === 0 ? (
+          <Alert severity="info">
+            Tu carrito está vacío. Explora el{" "}
+            <Link href="/catalogo">catálogo</Link> o agrega productos desde{" "}
+            <Link href="/proyectos">tus proyectos</Link>.
+          </Alert>
+        ) : (
+          <>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Sin precios aquí. Al solicitar la proforma, Dekorama te enviará
+              los precios para firmar.
+            </Alert>
+
+            <ResponsiveTable
+              minWidth={560}
+              elevation={0}
+              paperSx={{ boxShadow: "none" }}
+            >
+              <TableHead>
+                <TableRow>
+                  <TableCell>Producto</TableCell>
+                  <TableCell>SKU</TableCell>
+                  <TableCell align="center">Cantidad</TableCell>
+                  <TableCell align="center">Acciones</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {cartItems.map((item) => {
+                  const productName = item.product?.name ?? item.productSku;
+                  const productSku = item.product?.sku ?? item.productSku;
+                  const familyName = item.product?.familyName;
+
+                  return (
+                    <TableRow key={item.id}>
+                      <TableCell>
+                        <Box
+                          sx={{ display: "flex", alignItems: "center", gap: 2 }}
+                        >
+                          {item.product?.imageUrl && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={item.product.imageUrl}
+                              alt={productName}
+                              style={{
+                                width: 60,
+                                height: 60,
+                                objectFit: "cover",
+                                borderRadius: 4,
+                              }}
+                            />
+                          )}
+                          <Box>
+                            <Typography variant="body1">{productName}</Typography>
+                            {familyName && (
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                {familyName}
+                              </Typography>
+                            )}
+                            {!item.product && (
+                              <Typography
+                                variant="caption"
+                                color="warning.main"
+                                display="block"
+                              >
+                                Producto no disponible en catálogo
+                              </Typography>
+                            )}
+                          </Box>
+                        </Box>
+                      </TableCell>
+                      <TableCell>{productSku}</TableCell>
+                      <TableCell align="center">
+                        <TextField
+                          type="number"
+                          value={item.quantity}
+                          onChange={(e) => {
+                            const newQty = parseInt(e.target.value, 10) || 1;
+                            void handleUpdateQuantity(item.id, newQty);
+                          }}
+                          inputProps={{
+                            min: 1,
+                            style: { textAlign: "center" },
+                          }}
+                          size="small"
+                          sx={{ width: 80 }}
+                        />
+                      </TableCell>
+                      <TableCell align="center">
+                        <IconButton
+                          color="error"
+                          onClick={() => setRemoveItemId(item.id)}
+                        >
+                          <Delete />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </ResponsiveTable>
+
+            <Divider sx={{ my: 3 }} />
+
+            <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+              <Box sx={{ width: { xs: "100%", sm: 320 } }}>
+                <TextField
+                  label="Mensaje para Dekorama (opcional)"
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  multiline
+                  minRows={2}
+                  fullWidth
+                  size="small"
+                  sx={{ mb: 2 }}
+                />
+                <Button
+                  variant="contained"
+                  fullWidth
+                  size="large"
+                  startIcon={<Send />}
+                  onClick={() => void handleSubmitSolicitud()}
+                  disabled={submitting}
+                >
+                  {submitting ? "Enviando..." : "Solicitar preforma"}
+                </Button>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: "block", mt: 1, textAlign: "center" }}
+                >
+                  Dekorama preparará tu proforma con precios y te la enviará
+                </Typography>
+              </Box>
+            </Box>
+          </>
+        )}
+      </Paper>
+
+      <Dialog
+        open={successDialogOpen}
+        onClose={() => {
+          setSuccessDialogOpen(false);
+          window.location.href = "/solicitudes";
+        }}
+      >
+        <DialogTitle>Solicitud enviada</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1">
+            Tu solicitud fue enviada. El equipo Dekorama preparará tu proforma y
+            te notificará cuando esté lista.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              window.location.href = "/solicitudes";
+            }}
+            variant="contained"
+          >
+            Ver mis solicitudes
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <ConfirmDialog
+        open={!!removeItemId}
+        title="Eliminar producto"
+        message="¿Eliminar este producto del carrito?"
+        confirmLabel="Eliminar"
+        confirmColor="error"
+        onCancel={() => setRemoveItemId(null)}
+        onConfirm={() => {
+          const id = removeItemId;
+          setRemoveItemId(null);
+          if (id) void handleRemoveItem(id);
+        }}
+      />
+
+      <ConfirmDialog
+        open={clearCartOpen}
+        title="Vaciar carrito"
+        message="¿Vaciar todo el carrito?"
+        confirmLabel="Vaciar"
+        confirmColor="error"
+        onCancel={() => setClearCartOpen(false)}
+        onConfirm={() => void handleClearCartConfirm()}
+      />
+
+      <SnackbarHost />
+    </Container>
   );
 }
 

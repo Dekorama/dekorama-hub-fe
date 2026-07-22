@@ -43,7 +43,6 @@ interface ProductTag {
   product: {
     sku: string;
     name: string;
-    pvpPrice: number;
     familyName: string;
     subfamilyName: string;
   };
@@ -214,7 +213,7 @@ export function ProfessionalProfilePage() {
                         {imageTags.map((tag, index) => (
                           <Tooltip
                             key={tag.id}
-                            title={`${tag.product.name} - $${tag.product.pvpPrice}`}
+                            title={tag.product.name}
                           >
                             <Box
                               onClick={() => setSelectedProduct(tag.product)}
@@ -270,9 +269,9 @@ export function ProfessionalProfilePage() {
             <Typography variant="body2" gutterBottom>
               <strong>Subfamilia:</strong> {selectedProduct?.subfamilyName}
             </Typography>
-            <Typography variant="h5" color="primary" sx={{ mt: 2, mb: 2 }}>
-              ${selectedProduct?.pvpPrice}
-            </Typography>
+            <Alert severity="info" sx={{ mt: 2, mb: 2 }}>
+              Añade al carrito para solicitar proforma. Dekorama enviará los precios.
+            </Alert>
             <TextField
               type="number"
               label="Cantidad"

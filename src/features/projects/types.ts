@@ -71,7 +71,7 @@ export interface CatalogProduct {
   id: string;
   sku: string;
   name: string;
-  pvpPrice: number;
+  pvpPrice?: number;
   price?: number;
   family?: string;
   subfamily?: string;

@@ -33,7 +33,6 @@ import {
   Material,
   Project,
   Proposal,
-  getProductPrice,
 } from "@/features/projects/types";
 
 interface ProposalDeptForm {
@@ -152,7 +151,7 @@ export function ProjectProposalsTab({
         productSku: selectedProduct.sku,
         productName: selectedProduct.name,
         quantity: +matQty,
-        suggestedPrice: getProductPrice(selectedProduct),
+        suggestedPrice: 0,
       }),
     });
     const res = await fetch(`${API}/proposals/${selectedProposalId}/materials`, { credentials: "include" });
@@ -411,7 +410,7 @@ export function ProjectProposalsTab({
                 {products.slice(0, 5).map((p) => (
                   <Stack key={p.id} direction="row" justifyContent="space-between" sx={{ cursor: "pointer" }} onClick={() => setSelectedProduct(p)}>
                     <Typography variant="body2">{p.name}</Typography>
-                    <Typography>${getProductPrice(p).toFixed(2)}</Typography>
+                    <Typography variant="caption" color="text.secondary">{p.sku}</Typography>
                   </Stack>
                 ))}
                 {selectedProduct && (

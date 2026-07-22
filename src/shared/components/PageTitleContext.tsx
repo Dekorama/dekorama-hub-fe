@@ -16,6 +16,8 @@ const ROUTE_TITLES: Array<{ match: (path: string) => boolean; title: string }> =
   { match: (p) => p === "/propuestas", title: "Propuestas" },
   { match: (p) => p === "/portafolio/editar", title: "Portafolio" },
   { match: (p) => p === "/carrito", title: "Carrito de Compras" },
+  { match: (p) => p.startsWith("/catalogo/"), title: "Producto" },
+  { match: (p) => p === "/catalogo", title: "Catálogo" },
   { match: (p) => p === "/perfil", title: "Mi Perfil" },
   { match: (p) => p.startsWith("/profesionales/"), title: "Perfil Profesional" },
   { match: (p) => p.startsWith("/admin"), title: "Administración" },

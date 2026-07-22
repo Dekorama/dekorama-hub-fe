@@ -18,7 +18,6 @@ import {
   CatalogProduct,
   Project,
   ProjectProductItem,
-  getProductPrice,
 } from "@/features/projects/types";
 
 interface ProjectProductsTabProps {
@@ -172,9 +171,17 @@ export function ProjectProductsTab({ project, canEdit }: ProjectProductsTabProps
                   <Typography variant="body2" fontWeight={600}>{p.name}</Typography>
                   <Typography variant="caption" color="text.secondary">SKU: {p.sku}</Typography>
                 </Box>
-                <Typography fontWeight={700}>${getProductPrice(p).toFixed(2)}</Typography>
               </Stack>
             ))}
+            <Button
+              component={Link}
+              href="/catalogo"
+              size="small"
+              variant="text"
+              sx={{ alignSelf: "flex-start" }}
+            >
+              Abrir catálogo
+            </Button>
             {selected && (
               <Stack direction="row" spacing={1} alignItems="center">
                 <TextField label="Cantidad" type="number" value={qty} onChange={(e) => setQty(e.target.value)} size="small" sx={{ width: 100 }} />

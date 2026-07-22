@@ -92,6 +92,7 @@ Hook: `import { useConfirmDialog } from "@/shared/hooks/useConfirmDialog"`.
 | `/login`, `/registro` | `auth` |
 | `/`, `/venezuela` | `landing` |
 | `/carrito` | `cart` |
+| `/catalogo` | `catalog` |
 | `/pedidos` | `orders` |
 | `/facturas` | `invoices` |
 | `/propuestas`, `/solicitudes` | `proposals` |

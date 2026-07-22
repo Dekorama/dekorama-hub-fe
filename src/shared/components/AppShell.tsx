@@ -33,6 +33,7 @@ import RequestQuoteIcon from "@mui/icons-material/RequestQuote";
 import ReceiptIcon from "@mui/icons-material/Receipt";
 import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
+import StorefrontIcon from "@mui/icons-material/Storefront";
 import PersonIcon from "@mui/icons-material/Person";
 import Image from "next/image";
 import Link from "next/link";
@@ -56,6 +57,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Panel", icon: <DashboardIcon /> },
   { href: "/proyectos", label: "Proyectos", icon: <FolderOpenIcon /> },
+  { href: "/catalogo", label: "Catálogo", icon: <StorefrontIcon />, roles: ["client", "professional"] },
   { href: "/carrito", label: "Carrito", icon: <ShoppingCartIcon />, roles: ["client", "professional"] },
   { href: "/solicitudes", label: "Solicitudes", icon: <RequestQuoteIcon />, roles: ["client", "professional"] },
   { href: "/pedidos", label: "Pedidos", icon: <LocalShippingIcon />, roles: ["client", "professional"] },
