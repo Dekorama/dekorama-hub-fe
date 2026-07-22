@@ -25,7 +25,8 @@ import {
   Block as BlockIcon,
   Refresh as RefreshIcon,
 } from "@mui/icons-material";
-import { API } from "@/features/auth/hooks/useCurrentUser";
+import { API, useCurrentUser } from "@/features/auth/hooks/useCurrentUser";
+import type { AdminUser } from "@/features/admin/types/users";
 import { useConfirmDialog } from "@/shared/hooks/useConfirmDialog";
 import { ResponsiveTable, TableEmptyRow, TableLoadingRow } from "@/shared/ui";
 
@@ -56,12 +57,15 @@ const STATUS_COLOR: Record<
 };
 
 export function AdminInvitationsTab() {
+  const { user } = useCurrentUser();
   const { confirm, ConfirmDialogHost } = useConfirmDialog();
   const [emails, setEmails] = useState<string[]>([]);
   const [currentEmail, setCurrentEmail] = useState("");
   const [invitations, setInvitations] = useState<AdminInvitation[]>([]);
+  const [admins, setAdmins] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [listLoading, setListLoading] = useState(true);
+  const [adminsLoading, setAdminsLoading] = useState(true);
   const [actionId, setActionId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -116,6 +120,7 @@ export function AdminInvitationsTab() {
       setSuccess(`${newInvitations.length} invitación(es) enviada(s)`);
       setEmails([]);
       void loadInvitations();
+      void loadAdmins();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Error al enviar invitaciones");
     } finally {
@@ -136,6 +141,24 @@ export function AdminInvitationsTab() {
       console.error("Error loading invitations:", err);
     } finally {
       setListLoading(false);
+    }
+  };
+
+  const loadAdmins = async () => {
+    setAdminsLoading(true);
+    try {
+      const res = await fetch(`${API}/admin/users?role=admin`, {
+        credentials: "include",
+      });
+      if (res.ok) {
+        const data = (await res.json()) as AdminUser[];
+        setAdmins(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error("Error loading admins:", err);
+      setAdmins([]);
+    } finally {
+      setAdminsLoading(false);
     }
   };
 
@@ -174,6 +197,7 @@ export function AdminInvitationsTab() {
 
       setSuccess(successMsg);
       void loadInvitations();
+      void loadAdmins();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Error en la acción");
     } finally {
@@ -183,6 +207,7 @@ export function AdminInvitationsTab() {
 
   useEffect(() => {
     void loadInvitations();
+    void loadAdmins();
   }, []);
 
   return (
@@ -256,6 +281,50 @@ export function AdminInvitationsTab() {
           {loading ? "Enviando..." : `Enviar ${emails.length} Invitación(es)`}
         </Button>
       </Paper>
+
+      <Box>
+        <Typography variant="h6" gutterBottom>
+          Miembros con acceso
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Administradores activos que pueden entrar al panel.
+        </Typography>
+
+        <ResponsiveTable minWidth={480}>
+          <TableHead>
+            <TableRow>
+              <TableCell>Nombre</TableCell>
+              <TableCell>Email</TableCell>
+              <TableCell>Desde</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {adminsLoading ? (
+              <TableLoadingRow colSpan={3} />
+            ) : admins.length === 0 ? (
+              <TableEmptyRow colSpan={3} message="No hay administradores registrados." />
+            ) : (
+              admins.map((admin) => {
+                const isYou = user?.id === admin.id;
+                return (
+                  <TableRow key={admin.id}>
+                    <TableCell>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <Typography fontWeight={600}>{admin.name}</Typography>
+                        {isYou ? <Chip label="Tú" size="small" color="primary" /> : null}
+                      </Stack>
+                    </TableCell>
+                    <TableCell>{admin.email}</TableCell>
+                    <TableCell>
+                      {new Date(admin.createdAt).toLocaleDateString("es-ES")}
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </ResponsiveTable>
+      </Box>
 
       <Box>
         <Typography variant="h6" gutterBottom>
