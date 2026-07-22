@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Alert,
   Box,
   Button,
   Checkbox,
@@ -31,24 +30,15 @@ import { Add, Delete, PictureAsPdf, Visibility } from "@mui/icons-material";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { API } from "@/features/auth/hooks/useCurrentUser";
+import { AdminClientsTab } from "@/features/admin/components/AdminClientsTab";
 import { AdminInvitationsTab } from "@/features/admin/components/AdminInvitationsTab";
+import { AdminProfessionalsTab } from "@/features/admin/components/AdminProfessionalsTab";
 import { AdminTabPanel } from "@/features/admin/components/AdminTabPanel";
 import { useAdminMarket } from "@/features/admin/context/AdminMarketContext";
+import type { AdminUser } from "@/features/admin/types/users";
 import { adminApiUrl } from "@/features/admin/utils/adminApi";
 import { LabeledSelect } from "@/shared/components/LabeledSelect";
 import { PageToolbar, ResponsiveTable, ScrollableTabs, TableEmptyRow, TableLoadingRow } from "@/shared/ui";
-
-interface PendingUser {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  isVerified: boolean;
-  createdAt: string;
-  profileData: any;
-  taxRate?: number | null;
-  taxExempt?: boolean;
-}
 
 interface Invoice {
   id: string;
@@ -100,10 +90,6 @@ export function AdminHomePage() {
   const { market, config } = useAdminMarket();
   const [tab, setTab] = useState(0);
 
-  // Professionals
-  const [pendingPros, setPendingPros] = useState<PendingUser[]>([]);
-  const [loadingPros, setLoadingPros] = useState(true);
-
   // Invoices
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
@@ -115,7 +101,7 @@ export function AdminHomePage() {
   const [invoiceMode, setInvoiceMode] = useState<"proposal" | "manual">("proposal");
   const [selectedProposal, setSelectedProposal] = useState("");
   const [proposals, setProposals] = useState<Proposal[]>([]);
-  const [clients, setClients] = useState<PendingUser[]>([]);
+  const [clients, setClients] = useState<AdminUser[]>([]);
   const [selectedClient, setSelectedClient] = useState("");
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split("T")[0]);
   const [dueDate, setDueDate] = useState("");
@@ -135,33 +121,9 @@ export function AdminHomePage() {
     setTaxRate(config.taxRate);
   }, [config.taxRate, market]);
 
-  const fetchPros = () => {
-    fetch(adminApiUrl("/admin/users?role=professional&isVerified=false", market), {
-      credentials: "include",
-    })
-      .then((r) => r.json())
-      .then(setPendingPros)
-      .finally(() => setLoadingPros(false));
-  };
-
-  useEffect(() => {
-    fetchPros();
-    fetchInvoices();
-  }, [market]);
-
   useEffect(() => {
     fetchInvoices();
   }, [filterStatus, market]);
-
-  const verify = async (id: string, isVerified: boolean) => {
-    await fetch(`${API}/admin/users/${id}/verify`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ isVerified }),
-    });
-    fetchPros();
-  };
 
   // Invoice functions
   const fetchInvoices = async () => {
@@ -224,7 +186,7 @@ export function AdminHomePage() {
     setLineItems([{ description: "", productSku: "", quantity: 1, unitPrice: 0 }]);
   };
 
-  const applyClientTax = (client: PendingUser | undefined) => {
+  const applyClientTax = (client: AdminUser | undefined) => {
     if (!client) {
       setTaxExempt(false);
       setTaxRate(config.taxRate);
@@ -265,7 +227,7 @@ export function AdminHomePage() {
     }
   };
 
-  const updateLineItem = (index: number, field: keyof LineItemForm, value: any) => {
+  const updateLineItem = (index: number, field: keyof LineItemForm, value: string | number) => {
     const updated = [...lineItems];
     updated[index] = { ...updated[index], [field]: value };
     setLineItems(updated);
@@ -392,100 +354,22 @@ export function AdminHomePage() {
           "& .MuiTab-root": { minHeight: 48, textTransform: "none", fontWeight: 500 },
         }}
       >
-        <Tab
-          id="admin-tab-0"
-          aria-controls="admin-tabpanel-0"
-          label={
-            <Stack direction="row" spacing={1} alignItems="center">
-              <span>Profesionales</span>
-              {pendingPros.length > 0 && (
-                <Chip label={pendingPros.length} size="small" color="warning" sx={{ height: 20, fontSize: 11 }} />
-              )}
-            </Stack>
-          }
-        />
-        <Tab id="admin-tab-1" aria-controls="admin-tabpanel-1" label="Catálogo" />
-        <Tab id="admin-tab-2" aria-controls="admin-tabpanel-2" label="Facturas" />
-        <Tab id="admin-tab-3" aria-controls="admin-tabpanel-3" label="Invitaciones" />
+        <Tab id="admin-tab-0" aria-controls="admin-tabpanel-0" label="Clientes" />
+        <Tab id="admin-tab-1" aria-controls="admin-tabpanel-1" label="Profesionales" />
+        <Tab id="admin-tab-2" aria-controls="admin-tabpanel-2" label="Catálogo" />
+        <Tab id="admin-tab-3" aria-controls="admin-tabpanel-3" label="Facturas" />
+        <Tab id="admin-tab-4" aria-controls="admin-tabpanel-4" label="Invitaciones" />
       </ScrollableTabs>
 
       <AdminTabPanel value={tab} index={0}>
-        <Stack spacing={2}>
-          {loadingPros ? (
-            <Box display="flex" justifyContent="center" py={6}>
-              <CircularProgress size={28} />
-            </Box>
-          ) : null}
-          {!loadingPros && pendingPros.length === 0 && (
-                <Paper sx={{ p: 3, textAlign: "center", borderRadius: 3 }}>
-                  <Typography color="text.secondary">
-                    No hay profesionales pendientes de verificación.
-                  </Typography>
-                </Paper>
-              )}
-              {pendingPros.map((pro) => (
-                <Paper key={pro.id} sx={{ p: 3, borderRadius: 3 }}>
-                  <Stack
-                    direction="row"
-                    justifyContent="space-between"
-                    alignItems="flex-start"
-                    flexWrap="wrap"
-                    gap={2}
-                  >
-                    <Box>
-                      <Typography fontWeight={700}>{pro.name}</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {pro.email}
-                      </Typography>
-                      {pro.profileData?.specialties?.length > 0 && (
-                        <Stack
-                          direction="row"
-                          spacing={0.5}
-                          mt={0.5}
-                          flexWrap="wrap"
-                        >
-                          {(pro.profileData.specialties as string[]).map(
-                            (s) => (
-                              <Chip
-                                key={s}
-                                label={s}
-                                size="small"
-                                variant="outlined"
-                              />
-                            )
-                          )}
-                        </Stack>
-                      )}
-                      <Typography variant="caption" color="text.secondary">
-                        📎 Documentos (RIF, certificaciones). Próximamente
-                        (Google Cloud Storage)
-                      </Typography>
-                    </Box>
-                    <Stack direction="row" spacing={1}>
-                      <Button
-                        variant="contained"
-                        color="success"
-                        size="small"
-                        onClick={() => verify(pro.id, true)}
-                      >
-                        Aprobar
-                      </Button>
-                      <Button
-                        variant="outlined"
-                        color="error"
-                        size="small"
-                        onClick={() => verify(pro.id, false)}
-                      >
-                        Rechazar
-                      </Button>
-                    </Stack>
-                  </Stack>
-                </Paper>
-              ))}
-        </Stack>
+        <AdminClientsTab />
       </AdminTabPanel>
 
       <AdminTabPanel value={tab} index={1}>
+        <AdminProfessionalsTab />
+      </AdminTabPanel>
+
+      <AdminTabPanel value={tab} index={2}>
             <Paper sx={{ p: 4, textAlign: "center", borderRadius: 3 }}>
               <Typography variant="h6" gutterBottom>
                 Gestión de Catálogo de Productos
@@ -504,7 +388,7 @@ export function AdminHomePage() {
             </Paper>
       </AdminTabPanel>
 
-      <AdminTabPanel value={tab} index={2}>
+      <AdminTabPanel value={tab} index={3}>
         <Stack spacing={2}>
               <PageToolbar>
                 <TextField
@@ -632,7 +516,7 @@ export function AdminHomePage() {
         </Stack>
       </AdminTabPanel>
 
-      <AdminTabPanel value={tab} index={3}>
+      <AdminTabPanel value={tab} index={4}>
         <AdminInvitationsTab />
       </AdminTabPanel>
     </Stack>
