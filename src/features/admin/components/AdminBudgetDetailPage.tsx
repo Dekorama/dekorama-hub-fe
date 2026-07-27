@@ -331,6 +331,12 @@ export function AdminBudgetDetailPage() {
     });
   }, [materials, sections]);
 
+  const clientOptions = useMemo(() => {
+    if (!proposal?.client) return clients;
+    if (clients.some((c) => c.id === proposal.client!.id)) return clients;
+    return [proposal.client, ...clients];
+  }, [clients, proposal?.client]);
+
   const subtotal =
     materials.reduce(
       (s, m) =>
@@ -654,11 +660,6 @@ export function AdminBudgetDetailPage() {
       : proposal.status === "signed");
 
   const visibleComments = comments.filter((c) => c.visibility === commentTab);
-  const clientOptions = useMemo(() => {
-    if (!proposal.client) return clients;
-    if (clients.some((c) => c.id === proposal.client!.id)) return clients;
-    return [proposal.client, ...clients];
-  }, [clients, proposal.client]);
   const selectedClientOption =
     clientOptions.find((c) => c.id === selectedClientId) ?? null;
 
