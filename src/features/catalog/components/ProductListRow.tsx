@@ -9,15 +9,28 @@ import {
   Typography,
 } from "@mui/material";
 import { AddShoppingCart, Inventory2 } from "@mui/icons-material";
+import { formatCurrency } from "@/shared/utils/money";
+import { getMarketConfig, isMarketCode } from "@/shared/utils/market";
 import type { CatalogProduct } from "../types";
 
 type ProductListRowProps = {
   product: CatalogProduct;
   onAdd: (product: CatalogProduct) => void;
   adding?: boolean;
+  currency?: string;
 };
 
-export function ProductListRow({ product, onAdd, adding }: ProductListRowProps) {
+export function ProductListRow({
+  product,
+  onAdd,
+  adding,
+  currency,
+}: ProductListRowProps) {
+  const resolvedCurrency =
+    currency ??
+    getMarketConfig(isMarketCode(product.market) ? product.market : "VE").currency;
+  const price = Number(product.pvpPrice);
+
   return (
     <Stack
       direction={{ xs: "column", sm: "row" }}
@@ -67,7 +80,11 @@ export function ProductListRow({ product, onAdd, adding }: ProductListRowProps) 
           href={`/catalogo/${encodeURIComponent(product.sku)}`}
           variant="subtitle1"
           fontWeight={700}
-          sx={{ textDecoration: "none", color: "text.primary", "&:hover": { color: "primary.main" } }}
+          sx={{
+            textDecoration: "none",
+            color: "text.primary",
+            "&:hover": { color: "primary.main" },
+          }}
         >
           {product.name}
         </Typography>
@@ -79,6 +96,17 @@ export function ProductListRow({ product, onAdd, adding }: ProductListRowProps) 
           <Chip label={product.subfamilyName} size="small" />
         </Stack>
       </Box>
+
+      <Typography
+        variant="subtitle1"
+        fontWeight={700}
+        color="primary.main"
+        sx={{ flexShrink: 0, minWidth: { sm: 110 }, textAlign: { sm: "right" } }}
+      >
+        {Number.isFinite(price) && price > 0
+          ? formatCurrency(price, resolvedCurrency)
+          : "A consultar"}
+      </Typography>
 
       <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
         <Button

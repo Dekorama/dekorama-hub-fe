@@ -14,6 +14,7 @@ import { Storefront } from "@mui/icons-material";
 import { useCurrentUser } from "@/features/auth/hooks/useCurrentUser";
 import { useAppSnackbar } from "@/shared/hooks/useAppSnackbar";
 import { notifyCartUpdated } from "@/shared/utils/cartEvents";
+import { getMarketConfig, isMarketCode } from "@/shared/utils/market";
 import {
   addProductToCart,
   fetchCatalogFilters,
@@ -166,6 +167,9 @@ export function CatalogPage() {
   }
 
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const currency = getMarketConfig(
+    isMarketCode(user.country ?? "") ? user.country! : "VE",
+  ).currency;
 
   return (
     <Container maxWidth="lg" sx={{ mt: 3, mb: 8 }}>
@@ -178,8 +182,8 @@ export function CatalogPage() {
             </Typography>
           </Stack>
           <Typography variant="body2" color="text.secondary">
-            Explora materiales y añádelos al carrito para solicitar una proforma.
-            Los precios los prepara Dekorama.
+            Explora materiales con precio final y añádelos al carrito para solicitar
+            una proforma.
           </Typography>
         </Box>
 
@@ -238,6 +242,7 @@ export function CatalogPage() {
                   <ProductCard
                     key={product.id}
                     product={product}
+                    currency={currency}
                     onAdd={handleAdd}
                     adding={addingSku === product.sku}
                   />
@@ -249,6 +254,7 @@ export function CatalogPage() {
                   <ProductListRow
                     key={product.id}
                     product={product}
+                    currency={currency}
                     onAdd={handleAdd}
                     adding={addingSku === product.sku}
                   />

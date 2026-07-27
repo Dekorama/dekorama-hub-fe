@@ -22,6 +22,8 @@ import {
 import { useCurrentUser } from "@/features/auth/hooks/useCurrentUser";
 import { useAppSnackbar } from "@/shared/hooks/useAppSnackbar";
 import { notifyCartUpdated } from "@/shared/utils/cartEvents";
+import { formatCurrency } from "@/shared/utils/money";
+import { getMarketConfig, isMarketCode } from "@/shared/utils/market";
 import { addProductToCart, fetchProductBySku } from "../api/catalogApi";
 import type { CatalogProduct } from "../types";
 
@@ -86,6 +88,15 @@ export function ProductDetailPage() {
     );
   }
 
+  const currency = getMarketConfig(
+    isMarketCode(product.market)
+      ? product.market
+      : isMarketCode(user.country ?? "")
+        ? user.country!
+        : "VE",
+  ).currency;
+  const price = Number(product.pvpPrice);
+
   return (
     <Container maxWidth="md" sx={{ mt: 3, mb: 8 }}>
       <Button
@@ -140,6 +151,12 @@ export function ProductDetailPage() {
             </Typography>
           </Box>
 
+          <Typography variant="h5" fontWeight={700} color="primary.main">
+            {Number.isFinite(price) && price > 0
+              ? formatCurrency(price, currency)
+              : "Precio a consultar"}
+          </Typography>
+
           <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
             <Chip label={product.familyName} />
             <Chip label={product.subfamilyName} variant="outlined" />
@@ -163,11 +180,6 @@ export function ProductDetailPage() {
                 `Cobertura/caja: ${product.unitPerPiece} m²`}
             </Typography>
           )}
-
-          <Alert severity="info">
-            Sin precio público. Añade al carrito y solicita proforma; Dekorama
-            enviará los precios.
-          </Alert>
 
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} alignItems={{ sm: "center" }}>
             <TextField

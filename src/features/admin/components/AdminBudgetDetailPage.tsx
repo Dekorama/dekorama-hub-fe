@@ -150,6 +150,7 @@ type ProductPackagingLookup = {
   piecesPerBox: number | null;
   unitPerPiece: number | null;
   unit: string;
+  pvpPrice: number;
 };
 
 /** Detail table: SKU | Producto | qty | Ud | Pedido | Precio | Dto | Subtotal | actions = 9 */
@@ -219,6 +220,7 @@ export function AdminBudgetDetailPage() {
               {
                 ...packaging,
                 unit: normalizeUnit(typeof p.unit === "string" ? p.unit : "unidad"),
+                pvpPrice: Number(p.pvpPrice) || 0,
               },
             ] as const;
           }),
@@ -252,13 +254,22 @@ export function AdminBudgetDetailPage() {
         setMaterials(
           raw.map((m) => {
             const fromProduct = packagingMap.get(m.productSku);
+            const stored = Number(m.suggestedPrice);
+            const suggestedPrice =
+              Number.isFinite(stored) && stored > 0
+                ? stored
+                : fromProduct?.pvpPrice && fromProduct.pvpPrice > 0
+                  ? fromProduct.pvpPrice
+                  : Number.isFinite(stored)
+                    ? stored
+                    : 0;
             return {
               ...m,
               unit: normalizeUnit(fromProduct?.unit ?? m.unit ?? "unidad"),
               discountPct: Number(m.discountPct) || 0,
               quantity: Number(m.quantity),
               orderedQuantity: Number(m.orderedQuantity) || 0,
-              suggestedPrice: Number(m.suggestedPrice),
+              suggestedPrice,
               piecesPerBox: fromProduct?.piecesPerBox ?? null,
               unitPerPiece: fromProduct?.unitPerPiece ?? null,
               externalComment: m.externalComment ?? "",
@@ -352,42 +363,49 @@ export function AdminBudgetDetailPage() {
   const taxAmount = subtotal * (Number(taxRate) / 100);
   const total = subtotal + taxAmount;
 
+  async function persistBudget(options?: { silent?: boolean }): Promise<boolean> {
+    const clientId = selectedClientId ?? proposal?.client?.id;
+    const res = await fetch(`${API}/proposals/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        title: title || null,
+        taxRate,
+        laborCost,
+        clientId: clientId || undefined,
+        sections: grouped
+          .filter((g) => g.id !== null || g.materials.length > 0)
+          .map((g, i) => ({
+            name: g.name,
+            sortOrder: i,
+            materials: g.materials.map((m) => ({
+              productSku: m.productSku,
+              productName: m.productName,
+              quantity: m.quantity,
+              suggestedPrice: Number(m.suggestedPrice),
+              discountPct: Number(m.discountPct) || 0,
+              unit: normalizeUnit(m.unit),
+              externalComment: m.externalComment || null,
+              internalComment: m.internalComment || null,
+            })),
+          })),
+      }),
+    });
+    if (!res.ok) {
+      throw new Error(await readApiError(res, "No se pudo guardar"));
+    }
+    if (!options?.silent) {
+      showFeedback("Presupuesto guardado", "success");
+    }
+    return true;
+  }
+
   async function handleSave() {
     setActiveAction("save");
     try {
-      const clientId = selectedClientId ?? proposal?.client?.id;
-      const res = await fetch(`${API}/proposals/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          title: title || null,
-          taxRate,
-          laborCost,
-          clientId: clientId || undefined,
-          sections: grouped
-            .filter((g) => g.id !== null || g.materials.length > 0)
-            .map((g, i) => ({
-              name: g.name,
-              sortOrder: i,
-              materials: g.materials.map((m) => ({
-                productSku: m.productSku,
-                productName: m.productName,
-                quantity: m.quantity,
-                suggestedPrice: Number(m.suggestedPrice),
-                discountPct: Number(m.discountPct) || 0,
-                unit: normalizeUnit(m.unit),
-                externalComment: m.externalComment || null,
-                internalComment: m.internalComment || null,
-              })),
-            })),
-        }),
-      });
-      if (!res.ok) {
-        throw new Error(await readApiError(res, "No se pudo guardar"));
-      }
+      await persistBudget();
       await fetchData();
-      showFeedback("Presupuesto guardado", "success");
     } catch (err: unknown) {
       showFeedback(err instanceof Error ? err.message : "Error al guardar", "error");
     } finally {
@@ -517,8 +535,16 @@ export function AdminBudgetDetailPage() {
   }
 
   async function handleReady() {
+    if (total <= 0) {
+      showFeedback(
+        "Total en 0. Revisa precios de línea (o guarda PVP del catálogo) antes de generar la proforma.",
+        "error",
+      );
+      return;
+    }
     setActiveAction("ready");
     try {
+      await persistBudget({ silent: true });
       const res = await fetch(`${API}/proposals/${id}/ready`, {
         method: "PATCH",
         credentials: "include",
@@ -538,6 +564,7 @@ export function AdminBudgetDetailPage() {
   async function handleSendEmail() {
     setActiveAction("email");
     try {
+      await persistBudget({ silent: true });
       const res = await fetch(`${API}/proposals/${id}/send-proforma`, {
         method: "POST",
         credentials: "include",
@@ -556,6 +583,7 @@ export function AdminBudgetDetailPage() {
   async function handleDownloadPdf() {
     setActiveAction("pdf");
     try {
+      await persistBudget({ silent: true });
       const res = await fetch(`${API}/proposals/${id}/proforma.pdf`, {
         credentials: "include",
       });

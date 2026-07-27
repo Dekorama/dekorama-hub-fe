@@ -13,15 +13,23 @@ import {
   Typography,
 } from "@mui/material";
 import { AddShoppingCart, Inventory2 } from "@mui/icons-material";
+import { formatCurrency } from "@/shared/utils/money";
+import { getMarketConfig, isMarketCode } from "@/shared/utils/market";
 import type { CatalogProduct } from "../types";
 
 type ProductCardProps = {
   product: CatalogProduct;
   onAdd: (product: CatalogProduct) => void;
   adding?: boolean;
+  currency?: string;
 };
 
-export function ProductCard({ product, onAdd, adding }: ProductCardProps) {
+export function ProductCard({ product, onAdd, adding, currency }: ProductCardProps) {
+  const resolvedCurrency =
+    currency ??
+    getMarketConfig(isMarketCode(product.market) ? product.market : "VE").currency;
+  const price = Number(product.pvpPrice);
+
   return (
     <Card
       elevation={0}
@@ -87,7 +95,17 @@ export function ProductCard({ product, onAdd, adding }: ProductCardProps) {
             <Chip label={product.familyName} size="small" variant="outlined" />
             <Chip label={product.subfamilyName} size="small" />
           </Stack>
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
+          <Typography
+            variant="subtitle1"
+            fontWeight={700}
+            color="primary.main"
+            sx={{ mt: 1.25 }}
+          >
+            {Number.isFinite(price) && price > 0
+              ? formatCurrency(price, resolvedCurrency)
+              : "Precio a consultar"}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" display="block">
             Unidad: {product.unit}
           </Typography>
         </CardContent>

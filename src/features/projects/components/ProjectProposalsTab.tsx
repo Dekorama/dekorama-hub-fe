@@ -30,6 +30,7 @@ import { API, CurrentUser } from "@/features/auth/hooks/useCurrentUser";
 import {
   CatalogProduct,
   DEPARTMENT_LABELS,
+  getProductPrice,
   Material,
   Project,
   Proposal,
@@ -148,18 +149,29 @@ export function ProjectProposalsTab({
 
   const addMaterialToProposal = async () => {
     if (!selectedProduct || !selectedProposalId) return;
-    await fetch(`${API}/proposals/${selectedProposalId}/materials`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
+    const nextMaterials = [
+      ...materials.map((m) => ({
+        productSku: m.productSku,
+        productName: m.productName,
+        quantity: m.quantity,
+        suggestedPrice: Number(m.suggestedPrice) || 0,
+      })),
+      {
         productSku: selectedProduct.sku,
         productName: selectedProduct.name,
         quantity: +matQty,
-        suggestedPrice: 0,
-      }),
+        suggestedPrice: getProductPrice(selectedProduct),
+      },
+    ];
+    await fetch(`${API}/proposals/${selectedProposalId}/materials`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ materials: nextMaterials }),
     });
-    const res = await fetch(`${API}/proposals/${selectedProposalId}/materials`, { credentials: "include" });
+    const res = await fetch(`${API}/proposals/${selectedProposalId}/materials`, {
+      credentials: "include",
+    });
     if (res.ok) setMaterials(await res.json());
     setSelectedProduct(null);
     setMatQty("1");

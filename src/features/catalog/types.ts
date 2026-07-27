@@ -15,6 +15,8 @@ export type CatalogProduct = {
   stock: number;
   isActive: boolean;
   market: string;
+  /** Final catalog price (PVP). */
+  pvpPrice: number;
 };
 
 export type CatalogFamily = {

@@ -143,7 +143,7 @@ export function ProjectFormWizard({ open, onClose, onCreated }: ProjectFormWizar
               ))}
             </LabeledSelect>
             <TextField
-              label={`Presupuesto estimado (${getMarketConfig(country).currency})`}
+              label={`Inversión estimada (${getMarketConfig(country).currency})`}
               type="number"
               value={budget}
               onChange={(e) => setBudget(e.target.value)}
