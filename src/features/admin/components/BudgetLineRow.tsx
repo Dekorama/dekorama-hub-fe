@@ -16,6 +16,7 @@ import {
 import CommentOutlinedIcon from "@mui/icons-material/CommentOutlined";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { ClearableNumberField } from "@/shared/ui";
+import { formatCurrency } from "@/shared/utils/money";
 import {
   boxesForM2,
   displayUnitLabel,
@@ -47,6 +48,7 @@ type BudgetLineRowProps = {
   commentsColSpan: number;
   onDelete?: () => void;
   canDelete?: boolean;
+  currency: string;
 };
 
 export function BudgetLineRow({
@@ -57,6 +59,7 @@ export function BudgetLineRow({
   commentsColSpan,
   onDelete,
   canDelete = true,
+  currency,
 }: BudgetLineRowProps) {
   const hasComments =
     Boolean(line.externalComment?.trim()) || Boolean(line.internalComment?.trim());
@@ -155,7 +158,7 @@ export function BudgetLineRow({
         </TableCell>
         <TableCell align="right" sx={{ verticalAlign: "top", whiteSpace: "nowrap" }}>
           <Typography variant="body2" sx={{ pt: 1 }}>
-            ${subtotal.toFixed(2)}
+            {formatCurrency(subtotal, currency)}
           </Typography>
         </TableCell>
         <TableCell align="right" sx={{ verticalAlign: "top", whiteSpace: "nowrap" }}>

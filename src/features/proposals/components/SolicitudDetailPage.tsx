@@ -23,6 +23,8 @@ import {
   getProposalStatusColor,
   getProposalStatusLabel,
 } from "@/shared/utils/proposalLabels";
+import { getMarketConfig, type MarketCode } from "@/shared/utils/market";
+import { formatCurrency } from "@/shared/utils/money";
 import { ResponsiveTable } from "@/shared/ui";
 
 interface Material {
@@ -61,6 +63,7 @@ async function readApiError(res: Response, fallback: string): Promise<string> {
 export function SolicitudDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { user, loading } = useCurrentUser();
+  const currency = getMarketConfig((user?.country as MarketCode) ?? "VE").currency;
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -230,7 +233,7 @@ export function SolicitudDetailPage() {
                 <TableCell>{m.externalComment || "—"}</TableCell>
                 {showPrices && (
                   <TableCell align="right">
-                    ${Number(m.suggestedPrice ?? 0).toFixed(2)}
+                    {formatCurrency(Number(m.suggestedPrice ?? 0), currency)}
                   </TableCell>
                 )}
               </TableRow>
@@ -239,7 +242,7 @@ export function SolicitudDetailPage() {
         </ResponsiveTable>
         {showPrices ? (
           <Typography sx={{ mt: 2, fontWeight: "bold" }} align="right">
-            Total: ${total.toFixed(2)}
+            Total: {formatCurrency(total, currency)}
           </Typography>
         ) : (
           <Typography

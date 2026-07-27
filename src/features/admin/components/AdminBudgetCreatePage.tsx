@@ -39,6 +39,7 @@ import {
   parsePackaging,
 } from "@/features/admin/utils/lineItemMath";
 import { PageToolbar, ResponsiveTable, ClearableNumberField } from "@/shared/ui";
+import { formatCurrency } from "@/shared/utils/money";
 import {
   BudgetLineRow,
   type BudgetLineEditable,
@@ -563,6 +564,7 @@ export function AdminBudgetCreatePage() {
                 <BudgetLineRow
                   key={line.key}
                   line={line}
+                  currency={config.currency}
                   commentsColSpan={CREATE_COMMENTS_COLSPAN}
                   canDelete={section.materials.length > 1}
                   onDelete={() =>
@@ -635,10 +637,12 @@ export function AdminBudgetCreatePage() {
         >
           <Stack spacing={0.25}>
             <Typography variant="body2" color="text.secondary">
-              Subtotal: ${subtotal.toFixed(2)} · {config.taxLabel} ({taxRate}%): $
-              {taxAmount.toFixed(2)}
+              Subtotal: {formatCurrency(subtotal, config.currency)} · {config.taxLabel} (
+              {taxRate}%): {formatCurrency(taxAmount, config.currency)}
             </Typography>
-            <Typography fontWeight="bold">Total: ${total.toFixed(2)}</Typography>
+            <Typography fontWeight="bold">
+              Total: {formatCurrency(total, config.currency)}
+            </Typography>
           </Stack>
           <Stack direction="row" spacing={1} justifyContent="flex-end">
             <Button component={Link} href="/admin/presupuestos" disabled={saving}>

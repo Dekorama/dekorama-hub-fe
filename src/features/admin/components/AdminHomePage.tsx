@@ -39,6 +39,7 @@ import type { AdminUser } from "@/features/admin/types/users";
 import { adminApiUrl } from "@/features/admin/utils/adminApi";
 import { LabeledSelect } from "@/shared/components/LabeledSelect";
 import { PageToolbar, ResponsiveTable, ScrollableTabs, TableEmptyRow, TableLoadingRow } from "@/shared/ui";
+import { formatCurrency } from "@/shared/utils/money";
 
 interface Invoice {
   id: string;
@@ -454,13 +455,13 @@ export function AdminHomePage() {
                             {new Date(invoice.issueDate).toLocaleDateString()}
                           </TableCell>
                           <TableCell align="right">
-                            ${invoice.subtotal.toFixed(2)}
+                            {formatCurrency(invoice.subtotal, config.currency)}
                           </TableCell>
                           <TableCell align="right">
-                            ${invoice.taxAmount.toFixed(2)}
+                            {formatCurrency(invoice.taxAmount, config.currency)}
                           </TableCell>
                           <TableCell align="right">
-                            <strong>${invoice.total.toFixed(2)}</strong>
+                            <strong>{formatCurrency(invoice.total, config.currency)}</strong>
                           </TableCell>
                           <TableCell>
                             <Chip
@@ -787,10 +788,10 @@ export function AdminHomePage() {
                           <TableCell>{item.productSku || "-"}</TableCell>
                           <TableCell align="right">{item.quantity}</TableCell>
                           <TableCell align="right">
-                            ${item.unitPrice.toFixed(2)}
+                            {formatCurrency(item.unitPrice, config.currency)}
                           </TableCell>
                           <TableCell align="right">
-                            ${item.lineTotal.toFixed(2)}
+                            {formatCurrency(item.lineTotal, config.currency)}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -801,16 +802,22 @@ export function AdminHomePage() {
                 <Stack spacing={1} alignItems="flex-end">
                   <Stack direction="row" spacing={2} justifyContent="space-between" width="250px">
                     <Typography>Subtotal:</Typography>
-                    <Typography>${selectedInvoice.subtotal.toFixed(2)}</Typography>
+                    <Typography>
+                      {formatCurrency(selectedInvoice.subtotal, config.currency)}
+                    </Typography>
                   </Stack>
                   <Stack direction="row" spacing={2} justifyContent="space-between" width="250px">
-                    <Typography>IVA ({selectedInvoice.taxRate}%):</Typography>
-                    <Typography>${selectedInvoice.taxAmount.toFixed(2)}</Typography>
+                    <Typography>
+                      {config.taxLabel} ({selectedInvoice.taxRate}%):
+                    </Typography>
+                    <Typography>
+                      {formatCurrency(selectedInvoice.taxAmount, config.currency)}
+                    </Typography>
                   </Stack>
                   <Stack direction="row" spacing={2} justifyContent="space-between" width="250px">
                     <Typography variant="h6">Total:</Typography>
                     <Typography variant="h6">
-                      ${selectedInvoice.total.toFixed(2)}
+                      {formatCurrency(selectedInvoice.total, config.currency)}
                     </Typography>
                   </Stack>
                 </Stack>

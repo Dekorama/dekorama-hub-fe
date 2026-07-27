@@ -34,6 +34,8 @@ import {
   Project,
   Proposal,
 } from "@/features/projects/types";
+import { getMarketConfig, isMarketCode } from "@/shared/utils/market";
+import { formatCurrency } from "@/shared/utils/money";
 
 interface ProposalDeptForm {
   projectDepartmentId: string;
@@ -65,6 +67,9 @@ export function ProjectProposalsTab({
 }: ProjectProposalsTabProps) {
   const isProfessional = user?.role === "professional" && user.isVerified;
   const myProposal = proposals.find((p) => p.professionalId === user?.id);
+  const currency = getMarketConfig(
+    isMarketCode(project.country) ? project.country : "VE",
+  ).currency;
 
   const [openProposal, setOpenProposal] = useState(false);
   const [deptForms, setDeptForms] = useState<ProposalDeptForm[]>([]);
@@ -254,7 +259,7 @@ export function ProjectProposalsTab({
                 <Stack direction="row" spacing={1} mb={0.5} flexWrap="wrap">
                   <Chip label={chip.label} color={chip.color} size="small" />
                   <Typography variant="subtitle1" fontWeight={700}>
-                    Mano de obra: ${Number(prop.laborCost).toFixed(2)}
+                    Mano de obra: {formatCurrency(Number(prop.laborCost), currency)}
                   </Typography>
                   {estimatedDaysTotal(prop) > 0 && (
                     <Chip label={`${estimatedDaysTotal(prop)} días est.`} size="small" variant="outlined" />
@@ -267,7 +272,8 @@ export function ProjectProposalsTab({
                       const dept = project.departments.find((d) => d.id === pd.projectDepartmentId);
                       return (
                         <Typography key={pd.id} variant="caption" color="text.secondary">
-                          {dept ? DEPARTMENT_LABELS[dept.department] : "Depto"}: ${Number(pd.partialLaborCost).toFixed(2)}
+                          {dept ? DEPARTMENT_LABELS[dept.department] : "Depto"}:{" "}
+                          {formatCurrency(Number(pd.partialLaborCost), currency)}
                           {pd.estimatedDays ? ` · ${pd.estimatedDays}d` : ""}
                         </Typography>
                       );
@@ -333,7 +339,7 @@ export function ProjectProposalsTab({
                   </Typography>
                   <Stack direction="row" spacing={1}>
                     <TextField
-                      label="Mano de obra (USD)"
+                      label={`Mano de obra (${currency})`}
                       type="number"
                       value={form.partialLaborCost}
                       onChange={(e) => {
@@ -359,7 +365,9 @@ export function ProjectProposalsTab({
                 </Paper>
               );
             })}
-            <Typography variant="subtitle2">Total mano de obra: ${totalLabor.toFixed(2)}</Typography>
+            <Typography variant="subtitle2">
+              Total mano de obra: {formatCurrency(totalLabor, currency)}
+            </Typography>
             <TextField label="Mensaje" value={message} onChange={(e) => setMessage(e.target.value)} multiline rows={2} fullWidth />
             <Divider />
             <Typography variant="subtitle2" fontWeight={700}>Materiales (opcional)</Typography>
@@ -397,7 +405,9 @@ export function ProjectProposalsTab({
             {materials.map((m) => (
               <Stack key={m.id} direction="row" justifyContent="space-between">
                 <Typography>{m.productName} x{m.quantity}</Typography>
-                <Typography fontWeight={700}>${(Number(m.suggestedPrice) * m.quantity).toFixed(2)}</Typography>
+                <Typography fontWeight={700}>
+                  {formatCurrency(Number(m.suggestedPrice) * m.quantity, currency)}
+                </Typography>
               </Stack>
             ))}
             {user?.role === "professional" && selectedProposalStatus === "pending" && (
@@ -432,7 +442,9 @@ export function ProjectProposalsTab({
           <Stack spacing={2} mt={1}>
             <Stack direction="row" justifyContent="space-between">
               <Typography fontWeight={600}>Mano de obra</Typography>
-              <Typography fontWeight={700}>${Number(proformaProposal?.laborCost ?? 0).toFixed(2)}</Typography>
+              <Typography fontWeight={700}>
+                {formatCurrency(Number(proformaProposal?.laborCost ?? 0), currency)}
+              </Typography>
             </Stack>
             {proformaMaterials.length > 0 && (
               <Table size="small">
@@ -448,7 +460,9 @@ export function ProjectProposalsTab({
                     <TableRow key={m.id}>
                       <TableCell>{m.productName}</TableCell>
                       <TableCell align="right">{m.quantity}</TableCell>
-                      <TableCell align="right">${(Number(m.suggestedPrice) * m.quantity).toFixed(2)}</TableCell>
+                      <TableCell align="right">
+                        {formatCurrency(Number(m.suggestedPrice) * m.quantity, currency)}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -457,7 +471,9 @@ export function ProjectProposalsTab({
             <Divider />
             <Stack direction="row" justifyContent="space-between">
               <Typography variant="h6" fontWeight={700}>TOTAL</Typography>
-              <Typography variant="h6" fontWeight={700}>${proformaGrandTotal.toFixed(2)}</Typography>
+              <Typography variant="h6" fontWeight={700}>
+                {formatCurrency(proformaGrandTotal, currency)}
+              </Typography>
             </Stack>
           </Stack>
         </DialogContent>

@@ -1,3 +1,5 @@
+import { formatCurrency } from "./money";
+
 export function formatOrderTotal(
   total: number | string | null | undefined,
   lineItems?: {
@@ -6,6 +8,7 @@ export function formatOrderTotal(
     discountPct?: number | string;
     lineTotal?: number | string;
   }[],
+  currency = "USD",
 ): string {
   let value = Number(total);
   if (!Number.isFinite(value) && lineItems?.length) {
@@ -23,5 +26,5 @@ export function formatOrderTotal(
     }, 0);
   }
   if (!Number.isFinite(value)) return "N/D";
-  return `$${value.toFixed(2)}`;
+  return formatCurrency(value, currency);
 }

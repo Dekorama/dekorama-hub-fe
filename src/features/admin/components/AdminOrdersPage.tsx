@@ -28,6 +28,7 @@ import { SupplierOrderPreviewDialog } from "@/features/admin/components/Supplier
 import { useCurrentUser, API } from "@/features/auth/hooks/useCurrentUser";
 import { useAppSnackbar } from "@/shared/hooks/useAppSnackbar";
 import { formatOrderTotal } from "@/shared/utils/orderLabels";
+import { formatCurrency } from "@/shared/utils/money";
 import {
   formatClientOrderStatus,
   formatSupplierOrderStatus,
@@ -74,11 +75,13 @@ function OrderDetailRow({
   supplierOrders,
   onGeneratePos,
   onInvoice,
+  currency,
 }: {
   order: Order;
   supplierOrders: SupplierOrderRef[];
   onGeneratePos: (orderId: string) => void;
   onInvoice: (orderId: string) => void;
+  currency: string;
 }) {
   const pendingPoCount = supplierOrders.filter(
     (po) => po.status === "draft" || po.status === "sent",
@@ -173,7 +176,7 @@ function OrderDetailRow({
                 <TableCell align="right">
                   {(Number(li.discountPct) || 0).toFixed(2)}
                 </TableCell>
-                <TableCell align="right">${net.toFixed(2)}</TableCell>
+                <TableCell align="right">{formatCurrency(net, currency)}</TableCell>
                 <TableCell align="right">
                   {formatQty(Number(li.quantitySentToSupplier))}
                 </TableCell>
@@ -315,7 +318,7 @@ export function AdminOrdersPage() {
                     </TableCell>
                     <TableCell>{o.client?.name ?? o.client?.email}</TableCell>
                     <TableCell>{formatClientOrderStatus(o.status)}</TableCell>
-                    <TableCell>{formatOrderTotal(o.total, o.lineItems)}</TableCell>
+                    <TableCell>{formatOrderTotal(o.total, o.lineItems, config.currency)}</TableCell>
                     <TableCell>
                       {pos.length === 0 ? (
                         "—"
@@ -334,6 +337,7 @@ export function AdminOrdersPage() {
                           <OrderDetailRow
                             order={o}
                             supplierOrders={pos}
+                            currency={config.currency}
                             onGeneratePos={setPreviewOrderId}
                             onInvoice={setInvoiceDialog}
                           />

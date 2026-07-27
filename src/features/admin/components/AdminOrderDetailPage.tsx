@@ -26,6 +26,7 @@ import { adminApiUrl } from "@/features/admin/utils/adminApi";
 import { readApiError } from "@/features/admin/utils/readApiError";
 import { lineNetTotal } from "@/features/admin/utils/lineItemMath";
 import { formatClientOrderStatus } from "@/shared/utils/supplierOrderLabels";
+import { formatCurrency } from "@/shared/utils/money";
 import { AdminPageHeader } from "@/features/admin/components/AdminPageHeader";
 
 interface ProductOption {
@@ -650,11 +651,13 @@ export function AdminOrderDetailPage() {
 
       <Paper sx={{ p: 2 }}>
         <Stack spacing={0.5} alignItems="flex-end">
-          <Typography>Subtotal: ${subtotal.toFixed(2)}</Typography>
+          <Typography>Subtotal: {formatCurrency(subtotal, config.currency)}</Typography>
           <Typography>
-            {config.taxLabel} ({taxRate}%): ${taxAmount.toFixed(2)}
+            {config.taxLabel} ({taxRate}%): {formatCurrency(taxAmount, config.currency)}
           </Typography>
-          <Typography fontWeight="bold">Total: ${total.toFixed(2)}</Typography>
+          <Typography fontWeight="bold">
+            Total: {formatCurrency(total, config.currency)}
+          </Typography>
         </Stack>
         <Divider sx={{ my: 2 }} />
         <Stack direction="row" spacing={1} justifyContent="flex-end">

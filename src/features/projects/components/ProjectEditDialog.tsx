@@ -14,7 +14,7 @@ import {
 } from "@mui/material";
 import { useEffect, useState } from "react";
 import { API } from "@/features/auth/hooks/useCurrentUser";
-import { getMarketLabel, type MarketCode } from "@/shared/utils/market";
+import { getMarketConfig, getMarketLabel, isMarketCode, type MarketCode } from "@/shared/utils/market";
 import { Project } from "@/features/projects/types";
 
 interface ProjectEditDialogProps {
@@ -35,6 +35,9 @@ export function ProjectEditDialog({ open, project, onClose, onSaved }: ProjectEd
   const [postalCode, setPostalCode] = useState(project.postalCode ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const currency = getMarketConfig(
+    isMarketCode(project.country) ? project.country : "VE",
+  ).currency;
 
   useEffect(() => {
     if (!open) return;
@@ -88,7 +91,13 @@ export function ProjectEditDialog({ open, project, onClose, onSaved }: ProjectEd
         <Stack spacing={2} mt={1}>
           <TextField label="Título" value={title} onChange={(e) => setTitle(e.target.value)} required fullWidth />
           <TextField label="Descripción" value={description} onChange={(e) => setDescription(e.target.value)} multiline rows={3} required fullWidth />
-          <TextField label="Presupuesto (USD)" type="number" value={budget} onChange={(e) => setBudget(e.target.value)} fullWidth />
+          <TextField
+            label={`Presupuesto (${currency})`}
+            type="number"
+            value={budget}
+            onChange={(e) => setBudget(e.target.value)}
+            fullWidth
+          />
           <TextField label="Dirección / edificio" value={location} onChange={(e) => setLocation(e.target.value)} fullWidth />
           <TextField label="Ciudad" value={locality} onChange={(e) => setLocality(e.target.value)} fullWidth />
           <TextField label="Estado / provincia" value={state} onChange={(e) => setState(e.target.value)} fullWidth />

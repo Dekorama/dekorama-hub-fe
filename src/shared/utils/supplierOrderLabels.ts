@@ -32,17 +32,7 @@ export function formatClientOrderStatus(status: string): string {
   return CLIENT_ORDER_STATUS[status] ?? status;
 }
 
-export function formatCurrency(amount: number, currency: string): string {
-  if (!Number.isFinite(amount)) return "N/D";
-  try {
-    return new Intl.NumberFormat("es-ES", {
-      style: "currency",
-      currency,
-    }).format(amount);
-  } catch {
-    return `${currency} ${amount.toFixed(2)}`;
-  }
-}
+export { formatCurrency } from "./money";
 
 export function supplierOrderTotal(
   lineItems: { quantity: number; unitCost: number | string; lineTotal?: number | string }[],

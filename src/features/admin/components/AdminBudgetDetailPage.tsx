@@ -54,6 +54,7 @@ import {
   parsePackaging,
 } from "@/features/admin/utils/lineItemMath";
 import { BudgetLineRow } from "@/features/admin/components/BudgetLineRow";
+import { formatCurrency } from "@/shared/utils/money";
 import {
   BudgetClientForm,
   buildClientProfileData,
@@ -842,6 +843,7 @@ export function AdminBudgetDetailPage() {
                 {group.materials.map((m) => (
                   <BudgetLineRow
                     key={m.id}
+                    currency={config.currency}
                     commentsColSpan={DETAIL_COMMENTS_COLSPAN}
                     line={{
                       unit: m.unit,
@@ -881,11 +883,13 @@ export function AdminBudgetDetailPage() {
 
         <Paper sx={{ p: 2 }}>
           <Stack spacing={0.5} alignItems="flex-end">
-            <Typography>Subtotal: ${subtotal.toFixed(2)}</Typography>
+            <Typography>Subtotal: {formatCurrency(subtotal, config.currency)}</Typography>
             <Typography>
-              {config.taxLabel} ({taxRate}%): ${taxAmount.toFixed(2)}
+              {config.taxLabel} ({taxRate}%): {formatCurrency(taxAmount, config.currency)}
             </Typography>
-            <Typography fontWeight="bold">Total: ${total.toFixed(2)}</Typography>
+            <Typography fontWeight="bold">
+              Total: {formatCurrency(total, config.currency)}
+            </Typography>
           </Stack>
         </Paper>
 

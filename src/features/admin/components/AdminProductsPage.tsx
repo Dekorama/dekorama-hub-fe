@@ -32,6 +32,7 @@ import { readApiError } from "@/features/admin/utils/readApiError";
 import { LabeledSelect } from "@/shared/components/LabeledSelect";
 import { AdminPageHeader } from "@/features/admin/components/AdminPageHeader";
 import { ConfirmDialog, PageToolbar, ResponsiveTable, TableEmptyRow, TableLoadingRow, ClearableNumberField } from "@/shared/ui";
+import { formatCurrency } from "@/shared/utils/money";
 
 type PricingMode = "neto" | "pvp";
 type FinishType = "decorado" | "pieza_lisa";
@@ -123,7 +124,7 @@ function isM2Unit(unit: string): boolean {
 
 export function AdminProductsPage() {
   const { user } = useCurrentUser();
-  const { market } = useAdminMarket();
+  const { market, config } = useAdminMarket();
   const { showSuccess, showError, showWarning, SnackbarHost } = useAppSnackbar();
   const [products, setProducts] = useState<Product[]>([]);
   const [families, setFamilies] = useState<Family[]>([]);
@@ -766,7 +767,9 @@ export function AdminProductsPage() {
                 <TableCell>{product.name}</TableCell>
                 <TableCell>{product.familyName}</TableCell>
                 <TableCell>{product.subfamilyName}</TableCell>
-                <TableCell align="right">${product.pvpPrice.toFixed(2)}</TableCell>
+                <TableCell align="right">
+                  {formatCurrency(product.pvpPrice, config.currency)}
+                </TableCell>
                 {!isSpainMarket && (
                   <TableCell align="right">{product.stock}</TableCell>
                 )}
@@ -924,7 +927,7 @@ export function AdminProductsPage() {
                 />
                 <Paper sx={{ p: 2, bgcolor: "grey.100" }}>
                   <Typography variant="body2" color="text.secondary">
-                    PVP calculado: ${calculatedPVP.toFixed(2)}
+                    PVP calculado: {formatCurrency(calculatedPVP, config.currency)}
                   </Typography>
                 </Paper>
               </>
@@ -948,7 +951,8 @@ export function AdminProductsPage() {
                 />
                 <Paper sx={{ p: 2, bgcolor: "grey.100" }}>
                   <Typography variant="body2" color="text.secondary">
-                    Costo de compra calculado: ${calculatedFactoryCost.toFixed(2)}
+                    Costo de compra calculado:{" "}
+                    {formatCurrency(calculatedFactoryCost, config.currency)}
                   </Typography>
                 </Paper>
               </>
@@ -1197,7 +1201,7 @@ export function AdminProductsPage() {
                   <ClearableNumberField label="Coste / Neto" value={formFactoryCost} onValueChange={setFormFactoryCost} fullWidth />
                   <ClearableNumberField label="Margen %" value={formProfitMargin} onValueChange={setFormProfitMargin} fullWidth inputProps={{ min: 0, max: MAX_PROFIT_MARGIN }} />
                   <Typography variant="body2" color="text.secondary">
-                    PVP calculado: ${calculatedPVP.toFixed(2)}
+                    PVP calculado: {formatCurrency(calculatedPVP, config.currency)}
                   </Typography>
                 </>
               ) : (
@@ -1205,7 +1209,8 @@ export function AdminProductsPage() {
                   <ClearableNumberField label="PVP" value={formPvpPrice} onValueChange={setFormPvpPrice} fullWidth />
                   <ClearableNumberField label="Margen %" value={formProfitMargin} onValueChange={setFormProfitMargin} fullWidth inputProps={{ min: 0, max: MAX_PROFIT_MARGIN }} />
                   <Typography variant="body2" color="text.secondary">
-                    Costo de compra calculado: ${calculatedFactoryCost.toFixed(2)}
+                    Costo de compra calculado:{" "}
+                    {formatCurrency(calculatedFactoryCost, config.currency)}
                   </Typography>
                 </>
               )}

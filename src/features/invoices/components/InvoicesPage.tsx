@@ -5,6 +5,8 @@ import {
   Button, TableBody, TableCell, TableHead, TableRow, Typography,
 } from "@mui/material";
 import { useCurrentUser, API } from "@/features/auth/hooks/useCurrentUser";
+import { getMarketConfig } from "@/shared/utils/market";
+import { formatCurrency } from "@/shared/utils/money";
 import { ResponsiveTable } from "@/shared/ui";
 
 interface Invoice {
@@ -18,6 +20,7 @@ interface Invoice {
 export function InvoicesPage() {
   const { user, loading } = useCurrentUser();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const currency = getMarketConfig(user?.country ?? "VE").currency;
 
   useEffect(() => {
     if (user) {
@@ -48,7 +51,7 @@ export function InvoicesPage() {
                 <TableRow key={inv.id}>
                   <TableCell>{inv.invoiceNumber}</TableCell>
                   <TableCell>{new Date(inv.issueDate).toLocaleDateString("es-ES")}</TableCell>
-                  <TableCell>${Number(inv.total).toFixed(2)}</TableCell>
+                  <TableCell>{formatCurrency(Number(inv.total), currency)}</TableCell>
                   <TableCell>{inv.status}</TableCell>
                   <TableCell>
                     <Button size="small" href={`${API}/invoices/${inv.id}/pdf`} target="_blank" component="a">Descargar</Button>
