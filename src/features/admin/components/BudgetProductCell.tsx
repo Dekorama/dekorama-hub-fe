@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Autocomplete, MenuItem, Stack, TextField, Typography } from "@mui/material";
 import { normalizeUnit } from "@/features/admin/utils/lineItemMath";
 
@@ -28,6 +29,7 @@ type BudgetProductCellProps = {
   unit: string;
   onChange: (patch: Partial<BudgetProductPatch>) => void;
   showSkuHint?: boolean;
+  disabled?: boolean;
 };
 
 const UNIT_OPTIONS = ["unidad", "m2", "caja", "metro", "kg", "litro"] as const;
@@ -37,6 +39,10 @@ function isCatalogSku(sku: string, products: BudgetProductOption[]): boolean {
   return products.some((p) => p.sku === sku);
 }
 
+function labelForCatalog(p: BudgetProductOption): string {
+  return `${p.sku} — ${p.name}`;
+}
+
 export function BudgetProductCell({
   products,
   productSku,
@@ -44,24 +50,54 @@ export function BudgetProductCell({
   unit,
   onChange,
   showSkuHint = false,
+  disabled = false,
 }: BudgetProductCellProps) {
   const catalog = products.find((p) => p.sku === productSku) ?? null;
   const manual = !catalog && Boolean(productName.trim() || productSku.trim());
-  const autocompleteValue: BudgetProductOption | string | null = catalog
-    ? catalog
-    : productName
-      ? productName
-      : null;
+
+  const [inputValue, setInputValue] = useState(() =>
+    catalog ? labelForCatalog(catalog) : productName,
+  );
+
+  useEffect(() => {
+    setInputValue(catalog ? labelForCatalog(catalog) : productName);
+  }, [catalog, productName, productSku]);
+
+  function commitManualName(raw: string) {
+    const name = raw.trim();
+    if (!name) {
+      onChange({
+        productSku: "",
+        productName: "",
+        unit: "unidad",
+        suggestedPrice: 0,
+        piecesPerBox: null,
+        unitPerPiece: null,
+      });
+      return;
+    }
+    onChange({
+      productSku: productSku.startsWith("MAN-") ? productSku : "",
+      productName: name,
+      piecesPerBox: null,
+      unitPerPiece: null,
+    });
+  }
 
   return (
     <Stack spacing={0.75} sx={{ minWidth: 220 }}>
       <Autocomplete
         size="small"
         freeSolo
+        disabled={disabled}
         options={products}
-        value={autocompleteValue}
-        onChange={(_, value) => {
-          if (value == null || value === "") {
+        value={catalog}
+        inputValue={inputValue}
+        clearOnBlur={false}
+        blurOnSelect
+        onChange={(_, value, reason) => {
+          if (reason === "clear") {
+            setInputValue("");
             onChange({
               productSku: "",
               productName: "",
@@ -72,16 +108,14 @@ export function BudgetProductCell({
             });
             return;
           }
+          // Ignore blur/reset null — keep typed manual text (clearOnBlur=false + local state)
+          if (value == null) return;
           if (typeof value === "string") {
-            const name = value.trim();
-            onChange({
-              productSku: productSku.startsWith("MAN-") ? productSku : "",
-              productName: name,
-              piecesPerBox: null,
-              unitPerPiece: null,
-            });
+            setInputValue(value);
+            commitManualName(value);
             return;
           }
+          setInputValue(labelForCatalog(value));
           onChange({
             productSku: value.sku,
             productName: value.name,
@@ -91,32 +125,29 @@ export function BudgetProductCell({
             unitPerPiece: value.unitPerPiece,
           });
         }}
-        onInputChange={(_, inputValue, reason) => {
+        onInputChange={(_, next, reason) => {
+          if (reason === "reset") return;
+          setInputValue(next);
           if (reason !== "input") return;
-          if (catalog) {
-            onChange({
-              productSku: "",
-              productName: inputValue,
-              suggestedPrice: 0,
-              piecesPerBox: null,
-              unitPerPiece: null,
-            });
-            return;
-          }
+          // Keep parent in sync so Guardar works without waiting for blur
           onChange({
-            productSku: productSku.startsWith("MAN-") ? productSku : "",
-            productName: inputValue,
-            piecesPerBox: null,
-            unitPerPiece: null,
+            productSku: catalog ? "" : productSku.startsWith("MAN-") ? productSku : "",
+            productName: next,
+            ...(catalog
+              ? { suggestedPrice: 0, piecesPerBox: null, unitPerPiece: null }
+              : { piecesPerBox: null, unitPerPiece: null }),
           });
         }}
-        getOptionLabel={(option) =>
-          typeof option === "string" ? option : `${option.sku} — ${option.name}`
-        }
-        isOptionEqualToValue={(a, b) => {
-          if (typeof a === "string" || typeof b === "string") return a === b;
-          return a.sku === b.sku;
+        onBlur={() => {
+          if (catalog) return;
+          if (inputValue.trim() !== productName.trim()) {
+            commitManualName(inputValue);
+          }
         }}
+        getOptionLabel={(option) =>
+          typeof option === "string" ? option : labelForCatalog(option)
+        }
+        isOptionEqualToValue={(a, b) => a.sku === b.sku}
         filterOptions={(options, state) => {
           const q = state.inputValue.trim().toLowerCase();
           if (!q) return options;
@@ -132,9 +163,11 @@ export function BudgetProductCell({
             size="small"
             placeholder="Catálogo o nombre manual"
             helperText={
-              manual
-                ? "Línea manual (sin catálogo)"
-                : "Escribe un nombre libre si no está en catálogo"
+              disabled
+                ? undefined
+                : manual
+                  ? "Línea manual (sin catálogo)"
+                  : "Escribe un nombre libre si no está en catálogo"
             }
           />
         )}
@@ -144,6 +177,7 @@ export function BudgetProductCell({
           select
           size="small"
           label="Unidad"
+          disabled={disabled}
           value={normalizeUnit(unit)}
           onChange={(e) => onChange({ unit: normalizeUnit(e.target.value) })}
         >

@@ -49,6 +49,7 @@ type BudgetLineRowProps = {
   onDelete?: () => void;
   canDelete?: boolean;
   currency: string;
+  disabled?: boolean;
 };
 
 export function BudgetLineRow({
@@ -60,6 +61,7 @@ export function BudgetLineRow({
   onDelete,
   canDelete = true,
   currency,
+  disabled = false,
 }: BudgetLineRowProps) {
   const hasComments =
     Boolean(line.externalComment?.trim()) || Boolean(line.internalComment?.trim());
@@ -95,6 +97,7 @@ export function BudgetLineRow({
             label={m2Mode ? "m²" : "Cant."}
             size="small"
             value={line.quantity}
+            disabled={disabled}
             onValueChange={(quantity) => onChange({ quantity })}
             inputProps={{ min: 0, step: "any" }}
             sx={{ width: 100 }}
@@ -111,7 +114,7 @@ export function BudgetLineRow({
                   ? ` · ${line.piecesPerBox} pz`
                   : ""}
               </Typography>
-              {canAdjustBoxes && (
+              {canAdjustBoxes && !disabled && (
                 <Button
                   size="small"
                   onClick={() => onChange({ quantity: rounded })}
@@ -137,6 +140,7 @@ export function BudgetLineRow({
             label="Precio"
             size="small"
             value={line.suggestedPrice}
+            disabled={disabled}
             onValueChange={(suggestedPrice) => onChange({ suggestedPrice })}
             inputProps={{ min: 0, step: 0.01 }}
             sx={{ width: 110 }}
@@ -147,6 +151,7 @@ export function BudgetLineRow({
             label="Dto %"
             size="small"
             value={line.discountPct}
+            disabled={disabled}
             onValueChange={(n) =>
               onChange({
                 discountPct: Math.min(100, Math.max(0, n)),
@@ -177,7 +182,7 @@ export function BudgetLineRow({
               <IconButton
                 size="small"
                 aria-label="Eliminar línea"
-                disabled={!canDelete}
+                disabled={disabled || !canDelete}
                 onClick={onDelete}
               >
                 <DeleteIcon fontSize="small" />
@@ -194,6 +199,7 @@ export function BudgetLineRow({
                 label="Comentario externo"
                 size="small"
                 fullWidth
+                disabled={disabled}
                 value={line.externalComment}
                 onChange={(e) => onChange({ externalComment: e.target.value })}
               />
@@ -201,6 +207,7 @@ export function BudgetLineRow({
                 label="Comentario interno"
                 size="small"
                 fullWidth
+                disabled={disabled}
                 value={line.internalComment}
                 onChange={(e) => onChange({ internalComment: e.target.value })}
               />

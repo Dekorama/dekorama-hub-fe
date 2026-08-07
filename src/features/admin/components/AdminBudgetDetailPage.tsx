@@ -38,6 +38,7 @@ import SaveIcon from "@mui/icons-material/Save";
 import SendIcon from "@mui/icons-material/Send";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
+import EditIcon from "@mui/icons-material/Edit";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 import Link from "next/link";
 import { useCurrentUser, API } from "@/features/auth/hooks/useCurrentUser";
@@ -445,32 +446,67 @@ export function AdminBudgetDetailPage() {
 
   async function handleSave() {
     const status = proposal?.status;
-    const willInvalidate =
-      status === "proforma_ready" || status === "signed" || status === "rejected";
-    if (willInvalidate) {
-      const ok = await confirm({
-        title: "Invalidar proforma / firma",
-        message:
-          "Se invalidará la proforma o firma actual. Habrá que generar, enviar y firmar de nuevo.",
-        confirmLabel: "Guardar e invalidar",
-        confirmColor: "warning",
-      });
-      if (!ok) return;
+    if (
+      status === "proforma_ready" ||
+      status === "signed" ||
+      status === "rejected"
+    ) {
+      showFeedback(
+        "Primero pulsa «Editar e invalidar firma» para poder modificar el presupuesto.",
+        "info",
+      );
+      return;
     }
 
     setActiveAction("save");
     try {
-      await persistBudget({ silent: willInvalidate });
-      if (willInvalidate) {
-        setSignatureInvalidated(true);
-        showFeedback(
-          "Presupuesto guardado. Proforma/firma invalidada — genera y envía de nuevo.",
-          "info",
-        );
-      }
+      await persistBudget();
       await fetchData();
     } catch (err: unknown) {
       showFeedback(err instanceof Error ? err.message : "Error al guardar", "error");
+    } finally {
+      setActiveAction(null);
+    }
+  }
+
+  async function handleUnlockForEdit() {
+    const status = proposal?.status;
+    if (
+      status !== "proforma_ready" &&
+      status !== "signed" &&
+      status !== "rejected"
+    ) {
+      return;
+    }
+    const ok = await confirm({
+      title: "Editar e invalidar firma",
+      message:
+        "Se invalidará la proforma o firma ahora. Luego puedes editar y guardar con normalidad. Después habrá que generar, enviar y firmar de nuevo.",
+      confirmLabel: "Invalidar y editar",
+      confirmColor: "warning",
+    });
+    if (!ok) return;
+
+    setActiveAction("save");
+    try {
+      // Invalidate status only — keep current lines intact
+      const res = await fetch(`${API}/proposals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        throw new Error(await readApiError(res, "No se pudo invalidar la firma"));
+      }
+      setSignatureInvalidated(true);
+      showFeedback(
+        "Firma/proforma invalidada. Ya puedes editar y guardar. Luego genera y envía la proforma.",
+        "info",
+      );
+      await fetchData();
+    } catch (err: unknown) {
+      showFeedback(err instanceof Error ? err.message : "Error al invalidar", "error");
     } finally {
       setActiveAction(null);
     }
@@ -781,6 +817,10 @@ export function AdminBudgetDetailPage() {
   const generateEnabled = canGenerateProforma(proposal.status);
   const emailEnabled = proposal.status === "proforma_ready";
   const isDirectSale = proposal.type === "direct_sale";
+  const linesLocked =
+    proposal.status === "proforma_ready" ||
+    proposal.status === "signed" ||
+    proposal.status === "rejected";
   const orderEnabled =
     pendingMaterials.length > 0 &&
     (isDirectSale
@@ -828,14 +868,52 @@ export function AdminBudgetDetailPage() {
             variant="outlined"
             startIcon={activeAction === "save" ? <CircularProgress size={16} /> : <SaveIcon />}
             onClick={handleSave}
-            disabled={activeAction !== null}
+            disabled={activeAction !== null || linesLocked}
           >
             Guardar
           </Button>
+          {linesLocked && (
+            <Button
+              variant="contained"
+              color="warning"
+              startIcon={
+                activeAction === "save" ? (
+                  <CircularProgress size={16} color="inherit" />
+                ) : (
+                  <EditIcon />
+                )
+              }
+              onClick={handleUnlockForEdit}
+              disabled={activeAction !== null}
+            >
+              Editar e invalidar firma
+            </Button>
+          )}
         </PageToolbar>
 
+        {linesLocked && (
+          <Alert
+            severity="warning"
+            action={
+              <Button
+                color="inherit"
+                size="small"
+                startIcon={<EditIcon />}
+                onClick={handleUnlockForEdit}
+                disabled={activeAction !== null}
+              >
+                Editar
+              </Button>
+            }
+          >
+            Presupuesto con proforma o firma. Líneas bloqueadas. Pulsa «Editar e invalidar
+            firma» una vez; luego edita y guarda con normalidad.
+          </Alert>
+        )}
+
         {(signatureInvalidated ||
-          (generateEnabled &&
+          (!linesLocked &&
+            generateEnabled &&
             ["pending", "solicitud_submitted"].includes(proposal.status))) && (
           <Alert
             severity="warning"
@@ -844,7 +922,7 @@ export function AdminBudgetDetailPage() {
             }
           >
             {signatureInvalidated
-              ? "Proforma o firma invalidada tras editar. Genera la proforma, envíala y el cliente debe firmar de nuevo."
+              ? "Proforma o firma invalidada. Edita lo que necesites, guarda, genera la proforma y envíala para firmar de nuevo."
               : "Pendiente de generar / enviar proforma para firma del cliente."}
           </Alert>
         )}
@@ -934,15 +1012,15 @@ export function AdminBudgetDetailPage() {
 
         {proposal.status === "proforma_ready" && (
           <Alert severity="success" icon={<CheckCircleOutlineIcon />}>
-            Proforma lista. Si editas y guardas, se invalidará y habrá que regenerarla y
-            enviarla. Envíala por email o descarga el PDF.
+            Proforma lista. Envíala por email o descarga el PDF. Para cambiar líneas usa
+            «Editar e invalidar firma».
           </Alert>
         )}
 
         {proposal.status === "signed" && (
           <Alert severity="info">
-            El cliente firmó la proforma. Puedes crear el pedido (total o parcial). Si
-            editas y guardas, se invalidará la firma y deberá firmar de nuevo.
+            El cliente firmó. Puedes crear el pedido (total o parcial). Para cambiar el
+            presupuesto usa «Editar e invalidar firma».
           </Alert>
         )}
 
@@ -982,6 +1060,7 @@ export function AdminBudgetDetailPage() {
                   label="Sección"
                   size="small"
                   value={group.name}
+                  disabled={linesLocked}
                   onChange={(e) => renameSection(group.id!, e.target.value)}
                   sx={{ flex: 1 }}
                 />
@@ -993,7 +1072,7 @@ export function AdminBudgetDetailPage() {
               {group.id && (
                 <IconButton
                   aria-label="Eliminar sección"
-                  disabled={sections.length <= 1}
+                  disabled={linesLocked || sections.length <= 1}
                   onClick={() => removeSection(group.id!)}
                 >
                   <DeleteIcon />
@@ -1019,6 +1098,7 @@ export function AdminBudgetDetailPage() {
                     key={m.id}
                     currency={config.currency}
                     commentsColSpan={DETAIL_COMMENTS_COLSPAN}
+                    disabled={linesLocked}
                     canDelete={materials.length > 1}
                     onDelete={() => removeMaterial(m.id)}
                     line={{
@@ -1040,6 +1120,7 @@ export function AdminBudgetDetailPage() {
                           productName={m.productName}
                           unit={m.unit}
                           showSkuHint
+                          disabled={linesLocked}
                           onChange={(patch) => updateMaterial(m.id, patch)}
                         />
                       </TableCell>
@@ -1064,6 +1145,7 @@ export function AdminBudgetDetailPage() {
               size="small"
               startIcon={<AddIcon />}
               sx={{ mt: 1.5 }}
+              disabled={linesLocked}
               onClick={() => addMaterialToSection(group.id)}
             >
               Agregar línea
@@ -1071,7 +1153,12 @@ export function AdminBudgetDetailPage() {
           </Paper>
         ))}
 
-        <Button variant="outlined" startIcon={<AddIcon />} onClick={addSection}>
+        <Button
+          variant="outlined"
+          startIcon={<AddIcon />}
+          disabled={linesLocked}
+          onClick={addSection}
+        >
           Agregar sección
         </Button>
 
@@ -1145,14 +1232,34 @@ export function AdminBudgetDetailPage() {
             Acciones
           </Typography>
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-            <Button
-              variant="outlined"
-              startIcon={activeAction === "save" ? <CircularProgress size={16} /> : <SaveIcon />}
-              onClick={handleSave}
-              disabled={activeAction !== null}
-            >
-              Guardar
-            </Button>
+            {linesLocked ? (
+              <Button
+                variant="contained"
+                color="warning"
+                startIcon={
+                  activeAction === "save" ? (
+                    <CircularProgress size={16} color="inherit" />
+                  ) : (
+                    <EditIcon />
+                  )
+                }
+                onClick={handleUnlockForEdit}
+                disabled={activeAction !== null}
+              >
+                Editar e invalidar firma
+              </Button>
+            ) : (
+              <Button
+                variant="outlined"
+                startIcon={
+                  activeAction === "save" ? <CircularProgress size={16} /> : <SaveIcon />
+                }
+                onClick={handleSave}
+                disabled={activeAction !== null}
+              >
+                Guardar
+              </Button>
+            )}
             <Button
               variant="contained"
               startIcon={
