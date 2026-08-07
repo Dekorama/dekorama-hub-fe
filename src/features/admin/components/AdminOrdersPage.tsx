@@ -125,7 +125,7 @@ function OrderDetailRow({
           onClick={() => onGeneratePos(order.id)}
           disabled={order.status === "draft" || order.status === "cancelled"}
         >
-          Generar POs
+          Generar pedidos a proveedor
         </Button>
         <Button variant="outlined" size="small" onClick={() => onInvoice(order.id)}>
           Facturar cliente
@@ -134,7 +134,7 @@ function OrderDetailRow({
           <Chip
             size="small"
             color="warning"
-            label={`${pendingPoCount} PO pendiente(s)`}
+            label={`${pendingPoCount} pedido(s) a proveedor pendiente(s)`}
             component={Link}
             href={`/admin/pedidos-proveedor?clientOrderId=${order.id}`}
             clickable
@@ -190,7 +190,7 @@ function OrderDetailRow({
       {supplierOrders.length > 0 && (
         <Box>
           <Typography variant="subtitle2" gutterBottom>
-            POs a proveedor
+            Pedidos a proveedor
           </Typography>
           <Stack spacing={0.5}>
             {supplierOrders.map((po) => (
@@ -229,7 +229,7 @@ export function AdminOrdersPage() {
         fetch(adminApiUrl("/supplier-orders", market), { credentials: "include" }),
       ]);
       if (!oRes.ok) throw new Error(await readApiError(oRes, "Error al cargar pedidos"));
-      if (!poRes.ok) throw new Error(await readApiError(poRes, "Error al cargar POs"));
+      if (!poRes.ok) throw new Error(await readApiError(poRes, "Error al cargar pedidos a proveedor"));
       setOrders(await oRes.json());
       setSupplierOrders(await poRes.json());
     } catch (err: unknown) {
@@ -284,7 +284,7 @@ export function AdminOrdersPage() {
             <TableCell>Cliente</TableCell>
             <TableCell>Estado</TableCell>
             <TableCell>Total</TableCell>
-            <TableCell>POs</TableCell>
+            <TableCell>Ped. proveedor</TableCell>
             <TableCell>Fecha</TableCell>
           </TableRow>
         </TableHead>
@@ -325,7 +325,7 @@ export function AdminOrdersPage() {
                       ) : pending > 0 ? (
                         <Chip size="small" color="warning" label={`${pending} pend.`} />
                       ) : (
-                        <Chip size="small" label={`${pos.length} PO`} variant="outlined" />
+                        <Chip size="small" label={`${pos.length} ped. prov.`} variant="outlined" />
                       )}
                     </TableCell>
                     <TableCell>{new Date(o.createdAt).toLocaleDateString("es-ES")}</TableCell>

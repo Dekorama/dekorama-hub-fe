@@ -45,11 +45,15 @@ type BudgetLineRowProps = {
   leadingCells: ReactNode;
   /** Optional cell after Ud (e.g. Pedido ratio). */
   afterUnitCell?: ReactNode;
+  /** Optional cell after afterUnitCell (e.g. Estado). */
+  statusCell?: ReactNode;
   commentsColSpan: number;
   onDelete?: () => void;
   canDelete?: boolean;
   currency: string;
   disabled?: boolean;
+  /** Extra action controls (e.g. transfer menu) rendered before comment/delete. */
+  extraActions?: ReactNode;
 };
 
 export function BudgetLineRow({
@@ -57,11 +61,13 @@ export function BudgetLineRow({
   onChange,
   leadingCells,
   afterUnitCell,
+  statusCell,
   commentsColSpan,
   onDelete,
   canDelete = true,
   currency,
   disabled = false,
+  extraActions,
 }: BudgetLineRowProps) {
   const hasComments =
     Boolean(line.externalComment?.trim()) || Boolean(line.internalComment?.trim());
@@ -135,6 +141,7 @@ export function BudgetLineRow({
           <Typography variant="body2">{displayUnitLabel(line.unit)}</Typography>
         </TableCell>
         {afterUnitCell}
+        {statusCell}
         <TableCell align="right" sx={{ verticalAlign: "top" }}>
           <ClearableNumberField
             label="Precio"
@@ -168,6 +175,7 @@ export function BudgetLineRow({
         </TableCell>
         <TableCell align="right" sx={{ verticalAlign: "top", whiteSpace: "nowrap" }}>
           <Stack direction="row" spacing={0.25} justifyContent="flex-end">
+            {extraActions}
             <Tooltip title={commentsOpen ? "Ocultar comentarios" : "Comentarios"}>
               <IconButton
                 size="small"

@@ -14,8 +14,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
-  FormControlLabel,
   IconButton,
   Paper,
   Snackbar,
@@ -40,6 +38,8 @@ import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
+import LocalShippingIcon from "@mui/icons-material/LocalShipping";
+import ReceiptIcon from "@mui/icons-material/Receipt";
 import Link from "next/link";
 import { useCurrentUser, API } from "@/features/auth/hooks/useCurrentUser";
 import { useAdminMarket } from "@/features/admin/context/AdminMarketContext";
@@ -52,16 +52,27 @@ import {
 import { PageToolbar, ResponsiveTable, ScrollableTabs, ClearableNumberField } from "@/shared/ui";
 import { useConfirmDialog } from "@/shared/hooks/useConfirmDialog";
 import {
-  displayUnitLabel,
   lineNetTotal,
   normalizeUnit,
   parsePackaging,
 } from "@/features/admin/utils/lineItemMath";
+import {
+  getMaterialLineStatusColor,
+  getMaterialLineStatusLabel,
+  invoiceRemainingQty,
+  orderRemainingQty,
+  type MaterialLineStatus,
+} from "@/features/admin/utils/materialLineStatus";
 import { BudgetLineRow } from "@/features/admin/components/BudgetLineRow";
 import {
   BudgetProductCell,
   type BudgetProductOption,
 } from "@/features/admin/components/BudgetProductCell";
+import {
+  BudgetLineTransferDialog,
+  type TransferTarget,
+} from "@/features/admin/components/BudgetLineTransferDialog";
+import { BudgetLineTransferMenu } from "@/features/admin/components/BudgetLineTransferMenu";
 import { formatCurrency } from "@/shared/utils/money";
 import {
   BudgetClientForm,
@@ -80,6 +91,9 @@ interface Material {
   unit: string;
   quantity: number;
   orderedQuantity: number;
+  invoicedQuantity: number;
+  supplierOrderedQuantity: number;
+  orderInvoicedQuantity: number;
   suggestedPrice: number;
   discountPct: number;
   sectionId: string | null;
@@ -87,6 +101,10 @@ interface Material {
   internalComment?: string | null;
   piecesPerBox: number | null;
   unitPerPiece: number | null;
+  lineStatus: MaterialLineStatus;
+  canOrder: boolean;
+  canCreateSupplierOrder: boolean;
+  canInvoice: boolean;
 }
 
 interface Section {
@@ -131,6 +149,7 @@ type ActionKey =
   | "email"
   | "pdf"
   | "order"
+  | "transfer"
   | "comment"
   | "client"
   | "createClient";
@@ -161,8 +180,8 @@ type ProductPackagingLookup = {
   pvpPrice: number;
 };
 
-/** Detail table: Producto | qty | Ud | Pedido | Precio | Dto | Subtotal | actions = 8 */
-const DETAIL_COMMENTS_COLSPAN = 8;
+/** Checkbox | Producto | qty | Ud | Pedido | Estado | Precio | Dto | Subtotal | actions */
+const DETAIL_COMMENTS_COLSPAN = 10;
 
 function newLocalId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -176,6 +195,9 @@ function emptyMaterial(sectionId: string | null): Material {
     unit: "unidad",
     quantity: 1,
     orderedQuantity: 0,
+    invoicedQuantity: 0,
+    supplierOrderedQuantity: 0,
+    orderInvoicedQuantity: 0,
     suggestedPrice: 0,
     discountPct: 0,
     sectionId,
@@ -183,6 +205,10 @@ function emptyMaterial(sectionId: string | null): Material {
     internalComment: "",
     piecesPerBox: null,
     unitPerPiece: null,
+    lineStatus: "pending",
+    canOrder: true,
+    canCreateSupplierOrder: true,
+    canInvoice: true,
   };
 }
 
@@ -203,10 +229,10 @@ export function AdminBudgetDetailPage() {
   const [laborCost, setLaborCost] = useState(0);
   const [loading, setLoading] = useState(true);
   const [activeAction, setActiveAction] = useState<ActionKey | null>(null);
-  const [orderDialogOpen, setOrderDialogOpen] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferTarget, setTransferTarget] = useState<TransferTarget>("order");
+  const [transferMaterialIds, setTransferMaterialIds] = useState<string[]>([]);
   const [selectedMaterialIds, setSelectedMaterialIds] = useState<string[]>([]);
-  const [orderExternalNotes, setOrderExternalNotes] = useState("");
-  const [orderInternalNotes, setOrderInternalNotes] = useState("");
   const [clients, setClients] = useState<ClientInfo[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [clientForm, setClientForm] = useState<BudgetClientFormValues>(() =>
@@ -305,11 +331,18 @@ export function AdminBudgetDetailPage() {
               discountPct: Number(m.discountPct) || 0,
               quantity: Number(m.quantity),
               orderedQuantity: Number(m.orderedQuantity) || 0,
+              invoicedQuantity: Number(m.invoicedQuantity) || 0,
+              supplierOrderedQuantity: Number(m.supplierOrderedQuantity) || 0,
+              orderInvoicedQuantity: Number(m.orderInvoicedQuantity) || 0,
               suggestedPrice,
               piecesPerBox: fromProduct?.piecesPerBox ?? null,
               unitPerPiece: fromProduct?.unitPerPiece ?? null,
               externalComment: m.externalComment ?? "",
               internalComment: m.internalComment ?? "",
+              lineStatus: (m.lineStatus as MaterialLineStatus) ?? "pending",
+              canOrder: m.canOrder ?? true,
+              canCreateSupplierOrder: m.canCreateSupplierOrder ?? true,
+              canInvoice: m.canInvoice ?? true,
             };
           }),
         );
@@ -336,10 +369,12 @@ export function AdminBudgetDetailPage() {
   }, [user, market]);
 
   const pendingMaterials = useMemo(
-    () =>
-      materials.filter(
-        (m) => Number(m.orderedQuantity ?? 0) < Number(m.quantity),
-      ),
+    () => materials.filter((m) => orderRemainingQty(m) > 0),
+    [materials],
+  );
+
+  const invoiceableMaterials = useMemo(
+    () => materials.filter((m) => invoiceRemainingQty(m) > 0),
     [materials],
   );
 
@@ -702,36 +737,99 @@ export function AdminBudgetDetailPage() {
     }
   }
 
-  function openOrderDialog() {
-    setSelectedMaterialIds(pendingMaterials.map((m) => m.id));
-    setOrderExternalNotes("");
-    setOrderInternalNotes("");
-    setOrderDialogOpen(true);
+  function openTransferDialog(target: TransferTarget, materialIds: string[]) {
+    setTransferTarget(target);
+    setTransferMaterialIds(materialIds);
+    setTransferOpen(true);
   }
 
-  async function handleCreateOrder() {
-    setActiveAction("order");
+  function openOrderDialog() {
+    openTransferDialog(
+      "order",
+      pendingMaterials.map((m) => m.id),
+    );
+  }
+
+  async function handleTransferConfirm(payload: {
+    materialListIds: string[];
+    externalNotes?: string;
+    internalNotes?: string;
+    issueDate?: string;
+    dueDate?: string;
+    includeLabor?: boolean;
+  }) {
+    setActiveAction("transfer");
     try {
+      if (transferTarget === "invoice") {
+        const res = await fetch(`${API}/invoices/from-proposal`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            proposalId: id,
+            taxRate,
+            materialListIds: payload.materialListIds,
+            issueDate: payload.issueDate,
+            dueDate: payload.dueDate,
+            includeLabor: payload.includeLabor ?? false,
+            notes: payload.internalNotes,
+          }),
+        });
+        if (!res.ok) {
+          throw new Error(await readApiError(res, "No se pudo crear la factura"));
+        }
+        const invoice = (await res.json()) as { invoiceNumber?: string };
+        setTransferOpen(false);
+        setSelectedMaterialIds([]);
+        await fetchData();
+        showFeedback(
+          `Factura ${invoice.invoiceNumber ?? ""} creada correctamente`,
+          "success",
+        );
+        return;
+      }
+
       const res = await fetch(`${API}/orders/from-proposal/${id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
           taxRate,
-          materialListIds: selectedMaterialIds,
-          externalNotes: orderExternalNotes || undefined,
-          internalNotes: orderInternalNotes || undefined,
+          materialListIds: payload.materialListIds,
+          externalNotes: payload.externalNotes,
+          internalNotes: payload.internalNotes,
+          alsoCreateSupplierOrders: transferTarget === "supplier_order",
         }),
       });
       if (!res.ok) {
         throw new Error(await readApiError(res, "No se pudo crear el pedido"));
       }
-      const order = (await res.json()) as { orderNumber?: string; id?: string };
-      setOrderDialogOpen(false);
+      const order = (await res.json()) as {
+        orderNumber?: string;
+        id?: string;
+        supplierOrders?: {
+          created: Array<{ orderNumber: string }>;
+          skipped: Array<{ sku: string }>;
+        };
+      };
+      setTransferOpen(false);
+      setSelectedMaterialIds([]);
       await fetchData();
-      showFeedback(`Pedido ${order.orderNumber ?? ""} creado correctamente`, "success");
+      const createdPos = order.supplierOrders?.created?.length ?? 0;
+      const skipped = order.supplierOrders?.skipped?.length ?? 0;
+      let msg = `Pedido ${order.orderNumber ?? ""} creado correctamente`;
+      if (transferTarget === "supplier_order") {
+        msg += createdPos
+          ? ` · ${createdPos} pedido(s) a proveedor`
+          : " · sin pedidos a proveedor generados";
+        if (skipped > 0) msg += ` (${skipped} SKU sin proveedor)`;
+      }
+      showFeedback(msg, "success");
     } catch (err: unknown) {
-      showFeedback(err instanceof Error ? err.message : "Error al crear pedido", "error");
+      showFeedback(
+        err instanceof Error ? err.message : "Error en el traspaso",
+        "error",
+      );
     } finally {
       setActiveAction(null);
     }
@@ -828,7 +926,33 @@ export function AdminBudgetDetailPage() {
           proposal.status,
         )
       : proposal.status === "signed");
+  const invoiceTransferEnabled = proposal.status === "signed";
+  const transferEnabled = orderEnabled || invoiceTransferEnabled;
   const hasPartialOrders = materials.some((m) => Number(m.orderedQuantity) > 0);
+
+  const selectedMaterials = materials.filter((m) =>
+    selectedMaterialIds.includes(m.id),
+  );
+  const selectedCanOrder = selectedMaterials.filter((m) => m.canOrder);
+  const selectedCanSupplier = selectedMaterials.filter(
+    (m) => m.canCreateSupplierOrder,
+  );
+  const selectedCanInvoice = selectedMaterials.filter((m) => m.canInvoice);
+
+  const transferLines = materials
+    .filter((m) => transferMaterialIds.includes(m.id))
+    .map((m) => ({
+      id: m.id,
+      productSku: m.productSku,
+      productName: m.productName,
+      unit: m.unit,
+      quantity: m.quantity,
+      remaining:
+        transferTarget === "invoice"
+          ? invoiceRemainingQty(m)
+          : orderRemainingQty(m),
+    }))
+    .filter((m) => m.remaining > 0);
 
   const visibleComments = comments.filter((c) => c.visibility === commentTab);
   const selectedClientOption =
@@ -1052,6 +1176,73 @@ export function AdminBudgetDetailPage() {
           </Paper>
         )}
 
+        {transferEnabled && selectedMaterialIds.length > 0 && (
+          <Paper sx={{ p: 1.5 }}>
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
+              <Typography variant="body2" sx={{ mr: 1 }}>
+                {selectedMaterialIds.length} seleccionado(s)
+              </Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<ShoppingCartIcon />}
+                disabled={!orderEnabled || selectedCanOrder.length === 0 || activeAction !== null}
+                onClick={() =>
+                  openTransferDialog(
+                    "order",
+                    selectedCanOrder.map((m) => m.id),
+                  )
+                }
+              >
+                A Pedido
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<LocalShippingIcon />}
+                disabled={
+                  !orderEnabled ||
+                  selectedCanSupplier.length === 0 ||
+                  activeAction !== null
+                }
+                onClick={() =>
+                  openTransferDialog(
+                    "supplier_order",
+                    selectedCanSupplier.map((m) => m.id),
+                  )
+                }
+              >
+                A Pedido a Proveedor
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<ReceiptIcon />}
+                disabled={
+                  !invoiceTransferEnabled ||
+                  selectedCanInvoice.length === 0 ||
+                  activeAction !== null
+                }
+                onClick={() =>
+                  openTransferDialog(
+                    "invoice",
+                    selectedCanInvoice.map((m) => m.id),
+                  )
+                }
+              >
+                A Factura
+              </Button>
+              <Button
+                size="small"
+                onClick={() => setSelectedMaterialIds([])}
+                disabled={activeAction !== null}
+              >
+                Limpiar
+              </Button>
+            </Stack>
+          </Paper>
+        )}
+
         {grouped.map((group) => (
           <Paper key={group.id ?? "none"} sx={{ p: 2 }}>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
@@ -1079,17 +1270,47 @@ export function AdminBudgetDetailPage() {
                 </IconButton>
               )}
             </Stack>
-            <ResponsiveTable minWidth={920} size="small" elevation={0}>
+            <ResponsiveTable minWidth={1100} size="small" elevation={0}>
               <TableHead>
                 <TableRow>
+                  <TableCell padding="checkbox" width={48}>
+                    {transferEnabled && (
+                      <Checkbox
+                        size="small"
+                        checked={
+                          group.materials.length > 0 &&
+                          group.materials.every((m) =>
+                            selectedMaterialIds.includes(m.id),
+                          )
+                        }
+                        indeterminate={
+                          group.materials.some((m) =>
+                            selectedMaterialIds.includes(m.id),
+                          ) &&
+                          !group.materials.every((m) =>
+                            selectedMaterialIds.includes(m.id),
+                          )
+                        }
+                        onChange={(e) => {
+                          const ids = group.materials.map((m) => m.id);
+                          setSelectedMaterialIds((prev) =>
+                            e.target.checked
+                              ? [...new Set([...prev, ...ids])]
+                              : prev.filter((id) => !ids.includes(id)),
+                          );
+                        }}
+                      />
+                    )}
+                  </TableCell>
                   <TableCell>Producto</TableCell>
                   <TableCell>Cant. / m²</TableCell>
                   <TableCell>Ud</TableCell>
                   <TableCell>Pedido</TableCell>
+                  <TableCell>Estado</TableCell>
                   <TableCell align="right">Precio</TableCell>
                   <TableCell align="right">Dto %</TableCell>
                   <TableCell align="right">Subtotal</TableCell>
-                  <TableCell align="right" width={88} />
+                  <TableCell align="right" width={120} />
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1113,22 +1334,61 @@ export function AdminBudgetDetailPage() {
                     }}
                     onChange={(patch) => updateMaterial(m.id, patch)}
                     leadingCells={
-                      <TableCell sx={{ minWidth: 260, verticalAlign: "top" }}>
-                        <BudgetProductCell
-                          products={products}
-                          productSku={m.productSku}
-                          productName={m.productName}
-                          unit={m.unit}
-                          showSkuHint
-                          disabled={linesLocked}
-                          onChange={(patch) => updateMaterial(m.id, patch)}
-                        />
-                      </TableCell>
+                      <>
+                        <TableCell padding="checkbox" sx={{ verticalAlign: "top" }}>
+                          {transferEnabled && (
+                            <Checkbox
+                              size="small"
+                              checked={selectedMaterialIds.includes(m.id)}
+                              onChange={(e) => {
+                                setSelectedMaterialIds((prev) =>
+                                  e.target.checked
+                                    ? [...prev, m.id]
+                                    : prev.filter((x) => x !== m.id),
+                                );
+                              }}
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell sx={{ minWidth: 260, verticalAlign: "top" }}>
+                          <BudgetProductCell
+                            products={products}
+                            productSku={m.productSku}
+                            productName={m.productName}
+                            unit={m.unit}
+                            showSkuHint
+                            disabled={linesLocked}
+                            onChange={(patch) => updateMaterial(m.id, patch)}
+                          />
+                        </TableCell>
+                      </>
                     }
                     afterUnitCell={
                       <TableCell sx={{ verticalAlign: "top", whiteSpace: "nowrap" }}>
                         {m.orderedQuantity ?? 0}/{m.quantity}
                       </TableCell>
+                    }
+                    statusCell={
+                      <TableCell sx={{ verticalAlign: "top" }}>
+                        <Chip
+                          size="small"
+                          label={getMaterialLineStatusLabel(m.lineStatus)}
+                          color={getMaterialLineStatusColor(m.lineStatus)}
+                          variant="outlined"
+                        />
+                      </TableCell>
+                    }
+                    extraActions={
+                      <BudgetLineTransferMenu
+                        transferEnabled={transferEnabled}
+                        canOrder={orderEnabled && m.canOrder}
+                        canCreateSupplierOrder={
+                          orderEnabled && m.canCreateSupplierOrder
+                        }
+                        canInvoice={invoiceTransferEnabled && m.canInvoice}
+                        disabled={activeAction !== null}
+                        onAction={(target) => openTransferDialog(target, [m.id])}
+                      />
                     }
                   />
                 ))}
@@ -1303,6 +1563,21 @@ export function AdminBudgetDetailPage() {
                 Crear pedido
               </Button>
             )}
+            {invoiceTransferEnabled && invoiceableMaterials.length > 0 && (
+              <Button
+                variant="contained"
+                onClick={() =>
+                  openTransferDialog(
+                    "invoice",
+                    invoiceableMaterials.map((m) => m.id),
+                  )
+                }
+                disabled={activeAction !== null}
+                startIcon={<ReceiptIcon />}
+              >
+                Crear factura
+              </Button>
+            )}
           </Stack>
         </Paper>
       </Stack>
@@ -1354,104 +1629,17 @@ export function AdminBudgetDetailPage() {
         </DialogActions>
       </Dialog>
 
-      <Dialog
-        open={orderDialogOpen}
-        onClose={() => setOrderDialogOpen(false)}
-        fullWidth
-        maxWidth="sm"
-      >
-        <DialogTitle>Crear pedido desde presupuesto</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Selecciona las líneas a incluir. Puedes convertir el total o solo una parte.
-          </Typography>
-          <Stack spacing={0.5}>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={
-                    pendingMaterials.length > 0 &&
-                    selectedMaterialIds.length === pendingMaterials.length
-                  }
-                  indeterminate={
-                    selectedMaterialIds.length > 0 &&
-                    selectedMaterialIds.length < pendingMaterials.length
-                  }
-                  onChange={(e) => {
-                    setSelectedMaterialIds(
-                      e.target.checked ? pendingMaterials.map((m) => m.id) : [],
-                    );
-                  }}
-                />
-              }
-              label="Seleccionar todo lo pendiente"
-            />
-            <Divider />
-            {pendingMaterials.map((m) => {
-              const remaining =
-                Number(m.quantity) - Number(m.orderedQuantity ?? 0);
-              return (
-                <FormControlLabel
-                  key={m.id}
-                  control={
-                    <Checkbox
-                      checked={selectedMaterialIds.includes(m.id)}
-                      onChange={(e) => {
-                        setSelectedMaterialIds((prev) =>
-                          e.target.checked
-                            ? [...prev, m.id]
-                            : prev.filter((x) => x !== m.id),
-                        );
-                      }}
-                    />
-                  }
-                  label={`${m.productName}${m.productSku ? ` (${m.productSku})` : ""} (×${remaining} ${displayUnitLabel(m.unit)})`}
-                />
-              );
-            })}
-          </Stack>
-          <Stack spacing={2} sx={{ mt: 2 }}>
-            <TextField
-              label="Comentario externo (cliente)"
-              size="small"
-              fullWidth
-              multiline
-              minRows={2}
-              value={orderExternalNotes}
-              onChange={(e) => setOrderExternalNotes(e.target.value)}
-            />
-            <TextField
-              label="Comentario interno"
-              size="small"
-              fullWidth
-              multiline
-              minRows={2}
-              value={orderInternalNotes}
-              onChange={(e) => setOrderInternalNotes(e.target.value)}
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOrderDialogOpen(false)} disabled={activeAction === "order"}>
-            Cancelar
-          </Button>
-          <Button
-            variant="contained"
-            color="success"
-            onClick={handleCreateOrder}
-            disabled={selectedMaterialIds.length === 0 || activeAction === "order"}
-            startIcon={
-              activeAction === "order" ? (
-                <CircularProgress size={16} color="inherit" />
-              ) : (
-                <ShoppingCartIcon />
-              )
-            }
-          >
-            Crear pedido
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <BudgetLineTransferDialog
+        open={transferOpen}
+        target={transferTarget}
+        lines={transferLines}
+        submitting={activeAction === "transfer"}
+        taxRate={taxRate}
+        taxLabel={config.taxLabel}
+        laborCost={Number(laborCost) || 0}
+        onClose={() => setTransferOpen(false)}
+        onConfirm={handleTransferConfirm}
+      />
 
       <Snackbar
         open={feedback.open}

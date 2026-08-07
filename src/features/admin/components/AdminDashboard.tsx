@@ -392,7 +392,7 @@ export function AdminDashboard({ user }: { user: CurrentUser }) {
             href="/admin/presupuestos"
           />
           <KpiCard
-            label="PO proveedor pendientes"
+            label="Pedidos a proveedor pendientes"
             value={data.supplierOrders.pending}
             icon={<LocalShippingIcon />}
             href="/admin/pedidos-proveedor"

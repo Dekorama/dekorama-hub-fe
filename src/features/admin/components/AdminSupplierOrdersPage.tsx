@@ -271,7 +271,7 @@ export function AdminSupplierOrdersPage() {
         fetch(adminApiUrl("/orders", market), { credentials: "include" }),
       ]);
 
-      if (!oRes.ok) throw new Error(await readApiError(oRes, "Error al cargar POs"));
+      if (!oRes.ok) throw new Error(await readApiError(oRes, "Error al cargar pedidos a proveedor"));
       if (!iRes.ok) throw new Error(await readApiError(iRes, "Error al cargar facturas"));
       if (!sRes.ok) throw new Error(await readApiError(sRes, "Error al cargar proveedores"));
       if (!cRes.ok) throw new Error(await readApiError(cRes, "Error al cargar pedidos"));
@@ -337,7 +337,7 @@ export function AdminSupplierOrdersPage() {
     }
     if (!manualSupplierGroup?.lines.length) {
       showError(
-        "Este proveedor no tiene líneas asignables en el pedido. Usa Generar POs en Pedidos Cliente.",
+        "Este proveedor no tiene líneas asignables en el pedido. Usa Generar pedidos a proveedor en Pedidos Cliente.",
       );
       return;
     }
@@ -355,14 +355,14 @@ export function AdminSupplierOrdersPage() {
           }),
         },
       );
-      if (!res.ok) throw new Error(await readApiError(res, "Error al crear PO"));
+      if (!res.ok) throw new Error(await readApiError(res, "Error al crear pedido a proveedor"));
       const po = (await res.json()) as { orderNumber: string };
-      showSuccess(`PO ${po.orderNumber} creado`);
+      showSuccess(`Pedido a proveedor ${po.orderNumber} creado`);
       setCreateOpen(false);
       setForm({ clientOrderId: "", supplierId: "" });
       void fetchAll();
     } catch (err: unknown) {
-      showError(err instanceof Error ? err.message : "Error al crear PO");
+      showError(err instanceof Error ? err.message : "Error al crear pedido a proveedor");
     } finally {
       setSaving(false);
     }
@@ -370,7 +370,7 @@ export function AdminSupplierOrdersPage() {
 
   async function createInvoice() {
     if (!invForm.supplierOrderId || !invForm.invoiceNumber) {
-      showError("Completa PO y número de factura");
+      showError("Completa pedido a proveedor y número de factura");
       return;
     }
     const amount = parseFloat(invForm.amount);
@@ -516,14 +516,14 @@ export function AdminSupplierOrdersPage() {
         title="Pedidos a Proveedor"
         actions={
           <>
-            <ExportButton endpoint="/admin/exports/supplier-orders" label="Exportar PO" market={market} />
+            <ExportButton endpoint="/admin/exports/supplier-orders" label="Exportar pedidos a proveedor" market={market} />
             <ExportButton
               endpoint="/admin/exports/supplier-invoices"
               label="Exportar facturas"
               market={market}
             />
             <Button variant="contained" onClick={() => setCreateOpen(true)}>
-              Nuevo PO (manual)
+              Nuevo pedido a proveedor (manual)
             </Button>
             <Button
               variant="outlined"
@@ -649,7 +649,7 @@ export function AdminSupplierOrdersPage() {
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1, minWidth: 320 }}>
             <Typography variant="body2" color="text.secondary">
-              Para pedidos multi-proveedor usa &quot;Generar POs&quot; desde Pedidos Cliente.
+              Para pedidos multi-proveedor usa &quot;Generar pedidos a proveedor&quot; desde Pedidos Cliente.
             </Typography>
             <LabeledSelect
               label="Pedido cliente"
@@ -704,7 +704,7 @@ export function AdminSupplierOrdersPage() {
               ) : (
                 <Alert severity="error" sx={{ py: 0 }}>
                   Este proveedor no tiene productos asignados en el pedido. Elige otro proveedor
-                  o usa Generar POs en Pedidos Cliente.
+                  o usa Generar pedidos a proveedor en Pedidos Cliente.
                 </Alert>
               )
             )}
@@ -729,7 +729,7 @@ export function AdminSupplierOrdersPage() {
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1, minWidth: 320 }}>
             <LabeledSelect
-              label="PO"
+              label="Pedido a proveedor"
               value={invForm.supplierOrderId}
               emptyLabel="Seleccionar pedido proveedor"
               fullWidth

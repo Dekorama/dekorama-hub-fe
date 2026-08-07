@@ -130,7 +130,7 @@ export function SupplierOrderPreviewDialog({
         },
       );
       if (!res.ok) {
-        throw new Error(await readApiError(res, "No se pudieron generar los PO"));
+        throw new Error(await readApiError(res, "No se pudieron generar los pedidos a proveedor"));
       }
       const result = (await res.json()) as {
         created: Array<{ orderNumber: string }>;
@@ -138,15 +138,15 @@ export function SupplierOrderPreviewDialog({
       };
       const numbers = result.created.map((po) => po.orderNumber).join(", ");
       let message = result.created.length
-        ? `${result.created.length} PO(s) creados: ${numbers}`
-        : "No se crearon POs";
+        ? `${result.created.length} pedido(s) a proveedor creados: ${numbers}`
+        : "No se crearon pedidos a proveedor";
       if (result.skipped.length) {
         message += `. ${result.skipped.length} SKU(s) omitidos por falta de proveedor primario`;
       }
       onGenerated(message);
       onClose();
     } catch (err: unknown) {
-      onError(err instanceof Error ? err.message : "Error al generar POs");
+      onError(err instanceof Error ? err.message : "Error al generar pedidos a proveedor");
     } finally {
       setGenerating(false);
     }
@@ -177,7 +177,7 @@ export function SupplierOrderPreviewDialog({
 
             {preview.existingSupplierOrders.length > 0 && (
               <Alert severity="info">
-                POs existentes:{" "}
+                Pedidos a proveedor existentes:{" "}
                 {preview.existingSupplierOrders
                   .map(
                     (po) =>
@@ -249,7 +249,9 @@ export function SupplierOrderPreviewDialog({
           onClick={handleGenerate}
           disabled={!canGenerate || generating}
         >
-          {generating ? "Generando…" : `Generar ${preview?.groups.length ?? 0} PO(s)`}
+          {generating
+            ? "Generando…"
+            : `Generar ${preview?.groups.length ?? 0} pedido(s) a proveedor`}
         </Button>
       </DialogActions>
     </Dialog>
