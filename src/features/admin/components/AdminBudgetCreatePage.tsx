@@ -45,6 +45,10 @@ import {
   type BudgetLineEditable,
 } from "@/features/admin/components/BudgetLineRow";
 import {
+  BudgetProductCell,
+  type BudgetProductOption,
+} from "@/features/admin/components/BudgetProductCell";
+import {
   BudgetClientForm,
   buildClientProfileData,
   clientFormHasChanges,
@@ -63,14 +67,7 @@ interface ClientOption {
   profileData?: Record<string, unknown> | null;
 }
 
-interface ProductOption {
-  sku: string;
-  name: string;
-  pvpPrice: number;
-  unit: string;
-  piecesPerBox: number | null;
-  unitPerPiece: number | null;
-}
+type ProductOption = BudgetProductOption;
 
 interface LineDraft extends BudgetLineEditable {
   key: string;
@@ -239,27 +236,23 @@ export function AdminBudgetCreatePage() {
     );
   }
 
-  function applyProduct(sectionIndex: number, lineIndex: number, product: ProductOption | null) {
-    if (!product) {
-      updateLine(sectionIndex, lineIndex, {
-        productSku: "",
-        productName: "",
-        unit: "unidad",
-        suggestedPrice: 0,
-        discountPct: 0,
-        piecesPerBox: null,
-        unitPerPiece: null,
-      });
-      return;
-    }
-    updateLine(sectionIndex, lineIndex, {
-      productSku: product.sku,
-      productName: product.name,
-      unit: normalizeUnit(product.unit),
-      suggestedPrice: Number(product.pvpPrice),
-      piecesPerBox: product.piecesPerBox,
-      unitPerPiece: product.unitPerPiece,
-    });
+  function applyProduct(
+    sectionIndex: number,
+    lineIndex: number,
+    patch: Partial<{
+      productSku: string;
+      productName: string;
+      unit: string;
+      suggestedPrice: number;
+      piecesPerBox: number | null;
+      unitPerPiece: number | null;
+    }>,
+  ) {
+    updateLine(sectionIndex, lineIndex, patch);
+  }
+
+  function isFilledLine(m: LineDraft): boolean {
+    return Boolean(m.productName.trim() || m.productSku.trim()) && m.quantity > 0;
   }
 
   async function handleCreateClient() {
@@ -336,11 +329,19 @@ export function AdminBudgetCreatePage() {
       setError("Nombre y email del cliente son obligatorios");
       return;
     }
-    const hasLines = sections.some((s) =>
-      s.materials.some((m) => m.productSku && m.quantity > 0),
-    );
+    const hasLines = sections.some((s) => s.materials.some(isFilledLine));
     if (!hasLines) {
       setError("Agrega al menos una línea de producto");
+      return;
+    }
+    const incomplete = sections.some((s) =>
+      s.materials.some(
+        (m) =>
+          (m.productSku.trim() || m.productName.trim()) && !m.productName.trim(),
+      ),
+    );
+    if (incomplete) {
+      setError("Las líneas manuales necesitan un nombre de producto");
       return;
     }
 
@@ -362,18 +363,16 @@ export function AdminBudgetCreatePage() {
           sections: sections.map((s, i) => ({
             name: s.name,
             sortOrder: i,
-            materials: s.materials
-              .filter((m) => m.productSku)
-              .map((m) => ({
-                productSku: m.productSku,
-                productName: m.productName,
-                quantity: m.quantity,
-                suggestedPrice: m.suggestedPrice,
-                discountPct: m.discountPct,
-                unit: normalizeUnit(m.unit),
-                externalComment: m.externalComment || undefined,
-                internalComment: m.internalComment || undefined,
-              })),
+            materials: s.materials.filter(isFilledLine).map((m) => ({
+              productSku: m.productSku || undefined,
+              productName: m.productName,
+              quantity: m.quantity,
+              suggestedPrice: m.suggestedPrice,
+              discountPct: m.discountPct,
+              unit: normalizeUnit(m.unit),
+              externalComment: m.externalComment || undefined,
+              internalComment: m.internalComment || undefined,
+            })),
           })),
         }),
       });
@@ -574,19 +573,15 @@ export function AdminBudgetCreatePage() {
                   }
                   onChange={(patch) => updateLine(sectionIndex, lineIndex, patch)}
                   leadingCells={
-                    <TableCell sx={{ minWidth: 240, verticalAlign: "top" }}>
-                      <Autocomplete
-                        size="small"
-                        options={products}
-                        value={products.find((p) => p.sku === line.productSku) ?? null}
-                        onChange={(_, product) =>
-                          applyProduct(sectionIndex, lineIndex, product)
+                    <TableCell sx={{ minWidth: 260, verticalAlign: "top" }}>
+                      <BudgetProductCell
+                        products={products}
+                        productSku={line.productSku}
+                        productName={line.productName}
+                        unit={line.unit}
+                        onChange={(patch) =>
+                          applyProduct(sectionIndex, lineIndex, patch)
                         }
-                        getOptionLabel={(p) => `${p.sku} — ${p.name}`}
-                        isOptionEqualToValue={(a, b) => a.sku === b.sku}
-                        renderInput={(params) => (
-                          <TextField {...params} label="Producto" size="small" />
-                        )}
                       />
                     </TableCell>
                   }

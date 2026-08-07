@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   Alert,
-  Autocomplete,
   Box,
   Button,
   CircularProgress,
@@ -28,6 +27,10 @@ import { lineNetTotal } from "@/features/admin/utils/lineItemMath";
 import { formatClientOrderStatus } from "@/shared/utils/supplierOrderLabels";
 import { formatCurrency } from "@/shared/utils/money";
 import { AdminPageHeader } from "@/features/admin/components/AdminPageHeader";
+import {
+  BudgetProductCell,
+  type BudgetProductOption,
+} from "@/features/admin/components/BudgetProductCell";
 
 interface ProductOption {
   sku: string;
@@ -78,6 +81,7 @@ interface OrderResponse {
   lineItems?: Array<{
     id: string;
     productSku: string;
+    productName?: string;
     unit: string;
     quantityOrdered: number;
     unitPrice: number;
@@ -89,7 +93,7 @@ interface OrderResponse {
     quantitySentToSupplier?: number;
     quantityInvoiced?: number;
     quantityFulfilled?: number;
-    product?: { name: string };
+    product?: { name: string } | null;
   }>;
 }
 
@@ -187,8 +191,9 @@ export function AdminOrderDetailPage() {
             id: li.id,
             productSku: li.productSku,
             productName:
-              li.product?.name ??
-              productNameBySku.get(li.productSku) ??
+              li.productName?.trim() ||
+              li.product?.name ||
+              productNameBySku.get(li.productSku) ||
               li.productSku,
             unit: li.unit || "unidad",
             quantityOrdered: Number(li.quantityOrdered),
@@ -235,8 +240,9 @@ export function AdminOrderDetailPage() {
               id: li.id,
               productSku: li.productSku,
               productName:
-                li.product?.name ??
-                productNameBySku.get(li.productSku) ??
+                li.productName?.trim() ||
+                li.product?.name ||
+                productNameBySku.get(li.productSku) ||
                 li.productSku,
               unit: li.unit || "unidad",
               quantityOrdered: Number(li.quantityOrdered),
@@ -317,31 +323,33 @@ export function AdminOrderDetailPage() {
   function applyProduct(
     sectionIndex: number,
     lineIndex: number,
-    product: ProductOption | null,
+    patch: Partial<{
+      productSku: string;
+      productName: string;
+      unit: string;
+      suggestedPrice: number;
+      piecesPerBox: number | null;
+      unitPerPiece: number | null;
+    }>,
   ) {
-    if (!product) {
-      updateLine(sectionIndex, lineIndex, {
-        productSku: "",
-        productName: "",
-        unit: "unidad",
-        unitPrice: 0,
-        discountPct: 0,
-      });
-      return;
-    }
-    updateLine(sectionIndex, lineIndex, {
-      productSku: product.sku,
-      productName: product.name,
-      unit: product.unit || "unidad",
-      unitPrice: Number(product.pvpPrice),
-    });
+    const next: Partial<LineDraft> = {};
+    if (patch.productSku !== undefined) next.productSku = patch.productSku;
+    if (patch.productName !== undefined) next.productName = patch.productName;
+    if (patch.unit !== undefined) next.unit = patch.unit;
+    if (patch.suggestedPrice !== undefined) next.unitPrice = patch.suggestedPrice;
+    updateLine(sectionIndex, lineIndex, next);
+  }
+
+  function isFilledLine(m: LineDraft): boolean {
+    return (
+      Boolean(m.productName.trim() || m.productSku.trim()) &&
+      m.quantityOrdered > 0
+    );
   }
 
   async function handleSave() {
     if (locked) return;
-    const hasLines = sections.some((s) =>
-      s.lineItems.some((m) => m.productSku && m.quantityOrdered > 0),
-    );
+    const hasLines = sections.some((s) => s.lineItems.some(isFilledLine));
     if (!hasLines) {
       showFeedback("Agrega al menos una línea de producto", "error");
       return;
@@ -360,20 +368,18 @@ export function AdminOrderDetailPage() {
           sections: sections.map((s, i) => ({
             name: s.name,
             sortOrder: i,
-            lineItems: s.lineItems
-              .filter((m) => m.productSku)
-              .map((m) => ({
-                id: m.id,
-                productSku: m.productSku,
-                productName: m.productName,
-                quantityOrdered: m.quantityOrdered,
-                unitPrice: m.unitPrice,
-                discountPct: m.discountPct,
-                unit: m.unit,
-                externalComment: m.externalComment || null,
-                internalComment: m.internalComment || null,
-                proposalMaterialListId: m.proposalMaterialListId ?? null,
-              })),
+            lineItems: s.lineItems.filter(isFilledLine).map((m) => ({
+              id: m.id,
+              productSku: m.productSku || undefined,
+              productName: m.productName,
+              quantityOrdered: m.quantityOrdered,
+              unitPrice: m.unitPrice,
+              discountPct: m.discountPct,
+              unit: m.unit,
+              externalComment: m.externalComment || null,
+              internalComment: m.internalComment || null,
+              proposalMaterialListId: m.proposalMaterialListId ?? null,
+            })),
           })),
         }),
       });
@@ -490,22 +496,34 @@ export function AdminOrderDetailPage() {
                   spacing={1}
                   alignItems={{ md: "center" }}
                 >
-                  <Autocomplete
-                    sx={{ flex: 2, minWidth: 220 }}
-                    options={products}
-                    disabled={locked}
-                    value={
-                      products.find((p) => p.sku === line.productSku) ?? null
-                    }
-                    onChange={(_, product) =>
-                      applyProduct(sectionIndex, lineIndex, product)
-                    }
-                    getOptionLabel={(p) => `${p.sku} — ${p.name}`}
-                    isOptionEqualToValue={(a, b) => a.sku === b.sku}
-                    renderInput={(params) => (
-                      <TextField {...params} label="Producto" size="small" />
-                    )}
-                  />
+                  <Box
+                    sx={{
+                      flex: 2,
+                      minWidth: 220,
+                      pointerEvents: locked ? "none" : "auto",
+                      opacity: locked ? 0.6 : 1,
+                    }}
+                  >
+                    <BudgetProductCell
+                      products={products.map(
+                        (p): BudgetProductOption => ({
+                          sku: p.sku,
+                          name: p.name,
+                          pvpPrice: p.pvpPrice,
+                          unit: p.unit || "unidad",
+                          piecesPerBox: null,
+                          unitPerPiece: null,
+                        }),
+                      )}
+                      productSku={line.productSku}
+                      productName={line.productName}
+                      unit={line.unit}
+                      showSkuHint
+                      onChange={(patch) =>
+                        applyProduct(sectionIndex, lineIndex, patch)
+                      }
+                    />
+                  </Box>
                   <TextField
                     label="Cant."
                     type="number"

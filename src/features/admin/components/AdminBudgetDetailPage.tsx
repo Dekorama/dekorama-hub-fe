@@ -16,6 +16,7 @@ import {
   DialogTitle,
   Divider,
   FormControlLabel,
+  IconButton,
   Paper,
   Snackbar,
   Stack,
@@ -36,6 +37,7 @@ import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import SaveIcon from "@mui/icons-material/Save";
 import SendIcon from "@mui/icons-material/Send";
 import AddIcon from "@mui/icons-material/Add";
+import DeleteIcon from "@mui/icons-material/Delete";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 import Link from "next/link";
 import { useCurrentUser, API } from "@/features/auth/hooks/useCurrentUser";
@@ -47,6 +49,7 @@ import {
   getProposalTypeLabel,
 } from "@/shared/utils/proposalLabels";
 import { PageToolbar, ResponsiveTable, ScrollableTabs, ClearableNumberField } from "@/shared/ui";
+import { useConfirmDialog } from "@/shared/hooks/useConfirmDialog";
 import {
   displayUnitLabel,
   lineNetTotal,
@@ -54,6 +57,10 @@ import {
   parsePackaging,
 } from "@/features/admin/utils/lineItemMath";
 import { BudgetLineRow } from "@/features/admin/components/BudgetLineRow";
+import {
+  BudgetProductCell,
+  type BudgetProductOption,
+} from "@/features/admin/components/BudgetProductCell";
 import { formatCurrency } from "@/shared/utils/money";
 import {
   BudgetClientForm,
@@ -153,16 +160,40 @@ type ProductPackagingLookup = {
   pvpPrice: number;
 };
 
-/** Detail table: SKU | Producto | qty | Ud | Pedido | Precio | Dto | Subtotal | actions = 9 */
-const DETAIL_COMMENTS_COLSPAN = 9;
+/** Detail table: Producto | qty | Ud | Pedido | Precio | Dto | Subtotal | actions = 8 */
+const DETAIL_COMMENTS_COLSPAN = 8;
+
+function newLocalId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function emptyMaterial(sectionId: string | null): Material {
+  return {
+    id: newLocalId("line"),
+    productSku: "",
+    productName: "",
+    unit: "unidad",
+    quantity: 1,
+    orderedQuantity: 0,
+    suggestedPrice: 0,
+    discountPct: 0,
+    sectionId,
+    externalComment: "",
+    internalComment: "",
+    piecesPerBox: null,
+    unitPerPiece: null,
+  };
+}
 
 export function AdminBudgetDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useCurrentUser();
   const { config, market } = useAdminMarket();
+  const { confirm, ConfirmDialogHost } = useConfirmDialog();
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
+  const [products, setProducts] = useState<BudgetProductOption[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentTab, setCommentTab] = useState<"client" | "internal">("client");
   const [newComment, setNewComment] = useState("");
@@ -184,6 +215,7 @@ export function AdminBudgetDetailPage() {
   const [newClientForm, setNewClientForm] = useState<BudgetClientFormValues>(() =>
     emptyBudgetClientForm(config.taxRate, market),
   );
+  const [signatureInvalidated, setSignatureInvalidated] = useState(false);
   const [feedback, setFeedback] = useState<{
     open: boolean;
     message: string;
@@ -206,25 +238,28 @@ export function AdminBudgetDetailPage() {
       ]);
 
       let packagingMap = new Map<string, ProductPackagingLookup>();
+      const productOptions: BudgetProductOption[] = [];
       if (productsRes.ok) {
-        const products = (await productsRes.json()) as Record<string, unknown>[];
-        packagingMap = new Map(
-          products.map((p) => {
-            const sku = String(p.sku ?? "");
-            const packaging = parsePackaging({
-              piecesPerBox: p.piecesPerBox as number | string | null | undefined,
-              unitPerPiece: p.unitPerPiece as number | string | null | undefined,
-            });
-            return [
-              sku,
-              {
-                ...packaging,
-                unit: normalizeUnit(typeof p.unit === "string" ? p.unit : "unidad"),
-                pvpPrice: Number(p.pvpPrice) || 0,
-              },
-            ] as const;
-          }),
-        );
+        const rawProducts = (await productsRes.json()) as Record<string, unknown>[];
+        for (const p of rawProducts) {
+          const sku = String(p.sku ?? "");
+          const packaging = parsePackaging({
+            piecesPerBox: p.piecesPerBox as number | string | null | undefined,
+            unitPerPiece: p.unitPerPiece as number | string | null | undefined,
+          });
+          const unit = normalizeUnit(typeof p.unit === "string" ? p.unit : "unidad");
+          const pvpPrice = Number(p.pvpPrice) || 0;
+          packagingMap.set(sku, { ...packaging, unit, pvpPrice });
+          productOptions.push({
+            sku,
+            name: String(p.name ?? ""),
+            pvpPrice,
+            unit,
+            piecesPerBox: packaging.piecesPerBox,
+            unitPerPiece: packaging.unitPerPiece,
+          });
+        }
+        setProducts(productOptions);
       }
 
       if (pRes.ok) {
@@ -365,6 +400,15 @@ export function AdminBudgetDetailPage() {
 
   async function persistBudget(options?: { silent?: boolean }): Promise<boolean> {
     const clientId = selectedClientId ?? proposal?.client?.id;
+    const filledGroups = grouped
+      .map((g) => ({
+        ...g,
+        materials: g.materials.filter(
+          (m) => Boolean(m.productName.trim() || m.productSku.trim()) && m.quantity > 0,
+        ),
+      }))
+      .filter((g) => g.materials.length > 0 || g.id !== null);
+
     const res = await fetch(`${API}/proposals/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -374,22 +418,20 @@ export function AdminBudgetDetailPage() {
         taxRate,
         laborCost,
         clientId: clientId || undefined,
-        sections: grouped
-          .filter((g) => g.id !== null || g.materials.length > 0)
-          .map((g, i) => ({
-            name: g.name,
-            sortOrder: i,
-            materials: g.materials.map((m) => ({
-              productSku: m.productSku,
-              productName: m.productName,
-              quantity: m.quantity,
-              suggestedPrice: Number(m.suggestedPrice),
-              discountPct: Number(m.discountPct) || 0,
-              unit: normalizeUnit(m.unit),
-              externalComment: m.externalComment || null,
-              internalComment: m.internalComment || null,
-            })),
+        sections: filledGroups.map((g, i) => ({
+          name: g.name,
+          sortOrder: i,
+          materials: g.materials.map((m) => ({
+            productSku: m.productSku || undefined,
+            productName: m.productName,
+            quantity: m.quantity,
+            suggestedPrice: Number(m.suggestedPrice),
+            discountPct: Number(m.discountPct) || 0,
+            unit: normalizeUnit(m.unit),
+            externalComment: m.externalComment || null,
+            internalComment: m.internalComment || null,
           })),
+        })),
       }),
     });
     if (!res.ok) {
@@ -402,9 +444,30 @@ export function AdminBudgetDetailPage() {
   }
 
   async function handleSave() {
+    const status = proposal?.status;
+    const willInvalidate =
+      status === "proforma_ready" || status === "signed" || status === "rejected";
+    if (willInvalidate) {
+      const ok = await confirm({
+        title: "Invalidar proforma / firma",
+        message:
+          "Se invalidará la proforma o firma actual. Habrá que generar, enviar y firmar de nuevo.",
+        confirmLabel: "Guardar e invalidar",
+        confirmColor: "warning",
+      });
+      if (!ok) return;
+    }
+
     setActiveAction("save");
     try {
-      await persistBudget();
+      await persistBudget({ silent: willInvalidate });
+      if (willInvalidate) {
+        setSignatureInvalidated(true);
+        showFeedback(
+          "Presupuesto guardado. Proforma/firma invalidada — genera y envía de nuevo.",
+          "info",
+        );
+      }
       await fetchData();
     } catch (err: unknown) {
       showFeedback(err instanceof Error ? err.message : "Error al guardar", "error");
@@ -553,6 +616,7 @@ export function AdminBudgetDetailPage() {
         throw new Error(await readApiError(res, "No se pudo generar la proforma"));
       }
       await fetchData();
+      setSignatureInvalidated(false);
       showFeedback("Proforma generada. Ya puedes enviarla al cliente o descargar el PDF.", "success");
     } catch (err: unknown) {
       showFeedback(err instanceof Error ? err.message : "Error al generar proforma", "error");
@@ -670,6 +734,41 @@ export function AdminBudgetDetailPage() {
     );
   }
 
+  function addMaterialToSection(sectionId: string | null) {
+    setMaterials((prev) => [...prev, emptyMaterial(sectionId)]);
+  }
+
+  function removeMaterial(materialId: string) {
+    setMaterials((prev) => {
+      const next = prev.filter((m) => m.id !== materialId);
+      return next.length > 0 ? next : prev;
+    });
+  }
+
+  function addSection() {
+    const section: Section = {
+      id: newLocalId("section"),
+      name: `Sección ${sections.length + 1}`,
+      sortOrder: sections.length,
+    };
+    setSections((prev) => [...prev, section]);
+    setMaterials((prev) => [...prev, emptyMaterial(section.id)]);
+  }
+
+  function removeSection(sectionId: string) {
+    if (sections.length <= 1 && materials.every((m) => m.sectionId === sectionId)) {
+      return;
+    }
+    setSections((prev) => prev.filter((s) => s.id !== sectionId));
+    setMaterials((prev) => prev.filter((m) => m.sectionId !== sectionId));
+  }
+
+  function renameSection(sectionId: string, name: string) {
+    setSections((prev) =>
+      prev.map((s) => (s.id === sectionId ? { ...s, name } : s)),
+    );
+  }
+
   if (loading || !proposal) {
     return (
       <Box display="flex" justifyContent="center" py={6}>
@@ -685,8 +784,11 @@ export function AdminBudgetDetailPage() {
   const orderEnabled =
     pendingMaterials.length > 0 &&
     (isDirectSale
-      ? ["pending", "proforma_ready", "signed"].includes(proposal.status)
+      ? ["pending", "proforma_ready", "signed", "solicitud_submitted"].includes(
+          proposal.status,
+        )
       : proposal.status === "signed");
+  const hasPartialOrders = materials.some((m) => Number(m.orderedQuantity) > 0);
 
   const visibleComments = comments.filter((c) => c.visibility === commentTab);
   const selectedClientOption =
@@ -694,6 +796,7 @@ export function AdminBudgetDetailPage() {
 
   return (
     <>
+      <ConfirmDialogHost />
       <Stack spacing={2}>
         <PageToolbar>
           <Button component={Link} href="/admin/presupuestos" size="small">
@@ -730,6 +833,28 @@ export function AdminBudgetDetailPage() {
             Guardar
           </Button>
         </PageToolbar>
+
+        {(signatureInvalidated ||
+          (generateEnabled &&
+            ["pending", "solicitud_submitted"].includes(proposal.status))) && (
+          <Alert
+            severity="warning"
+            onClose={
+              signatureInvalidated ? () => setSignatureInvalidated(false) : undefined
+            }
+          >
+            {signatureInvalidated
+              ? "Proforma o firma invalidada tras editar. Genera la proforma, envíala y el cliente debe firmar de nuevo."
+              : "Pendiente de generar / enviar proforma para firma del cliente."}
+          </Alert>
+        )}
+
+        {hasPartialOrders && (
+          <Alert severity="info">
+            Hay cantidades ya convertidas a pedido. Puedes seguir editando el presupuesto;
+            los pedidos existentes no se borran.
+          </Alert>
+        )}
 
         <Paper sx={{ p: 2 }}>
           <Typography variant="subtitle2" sx={{ mb: 1.5 }}>
@@ -809,14 +934,15 @@ export function AdminBudgetDetailPage() {
 
         {proposal.status === "proforma_ready" && (
           <Alert severity="success" icon={<CheckCircleOutlineIcon />}>
-            Proforma lista. Puedes seguir editando líneas y cliente; el PDF usa los datos
-            guardados actuales. Envíala por email o descarga el PDF.
+            Proforma lista. Si editas y guardas, se invalidará y habrá que regenerarla y
+            enviarla. Envíala por email o descarga el PDF.
           </Alert>
         )}
 
         {proposal.status === "signed" && (
           <Alert severity="info">
-            El cliente firmó la proforma. Puedes crear el pedido (total o parcial).
+            El cliente firmó la proforma. Puedes crear el pedido (total o parcial). Si
+            editas y guardas, se invalidará la firma y deberá firmar de nuevo.
           </Alert>
         )}
 
@@ -850,13 +976,33 @@ export function AdminBudgetDetailPage() {
 
         {grouped.map((group) => (
           <Paper key={group.id ?? "none"} sx={{ p: 2 }}>
-            <Typography variant="subtitle1" sx={{ mb: 1 }}>
-              {group.name}
-            </Typography>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+              {group.id ? (
+                <TextField
+                  label="Sección"
+                  size="small"
+                  value={group.name}
+                  onChange={(e) => renameSection(group.id!, e.target.value)}
+                  sx={{ flex: 1 }}
+                />
+              ) : (
+                <Typography variant="subtitle1" sx={{ flex: 1 }}>
+                  {group.name}
+                </Typography>
+              )}
+              {group.id && (
+                <IconButton
+                  aria-label="Eliminar sección"
+                  disabled={sections.length <= 1}
+                  onClick={() => removeSection(group.id!)}
+                >
+                  <DeleteIcon />
+                </IconButton>
+              )}
+            </Stack>
             <ResponsiveTable minWidth={920} size="small" elevation={0}>
               <TableHead>
                 <TableRow>
-                  <TableCell>SKU</TableCell>
                   <TableCell>Producto</TableCell>
                   <TableCell>Cant. / m²</TableCell>
                   <TableCell>Ud</TableCell>
@@ -864,7 +1010,7 @@ export function AdminBudgetDetailPage() {
                   <TableCell align="right">Precio</TableCell>
                   <TableCell align="right">Dto %</TableCell>
                   <TableCell align="right">Subtotal</TableCell>
-                  <TableCell align="right" width={56} />
+                  <TableCell align="right" width={88} />
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -873,6 +1019,8 @@ export function AdminBudgetDetailPage() {
                     key={m.id}
                     currency={config.currency}
                     commentsColSpan={DETAIL_COMMENTS_COLSPAN}
+                    canDelete={materials.length > 1}
+                    onDelete={() => removeMaterial(m.id)}
                     line={{
                       unit: m.unit,
                       quantity: m.quantity,
@@ -885,10 +1033,16 @@ export function AdminBudgetDetailPage() {
                     }}
                     onChange={(patch) => updateMaterial(m.id, patch)}
                     leadingCells={
-                      <>
-                        <TableCell sx={{ verticalAlign: "top" }}>{m.productSku}</TableCell>
-                        <TableCell sx={{ verticalAlign: "top" }}>{m.productName}</TableCell>
-                      </>
+                      <TableCell sx={{ minWidth: 260, verticalAlign: "top" }}>
+                        <BudgetProductCell
+                          products={products}
+                          productSku={m.productSku}
+                          productName={m.productName}
+                          unit={m.unit}
+                          showSkuHint
+                          onChange={(patch) => updateMaterial(m.id, patch)}
+                        />
+                      </TableCell>
                     }
                     afterUnitCell={
                       <TableCell sx={{ verticalAlign: "top", whiteSpace: "nowrap" }}>
@@ -906,8 +1060,20 @@ export function AdminBudgetDetailPage() {
                 )}
               </TableBody>
             </ResponsiveTable>
+            <Button
+              size="small"
+              startIcon={<AddIcon />}
+              sx={{ mt: 1.5 }}
+              onClick={() => addMaterialToSection(group.id)}
+            >
+              Agregar línea
+            </Button>
           </Paper>
         ))}
+
+        <Button variant="outlined" startIcon={<AddIcon />} onClick={addSection}>
+          Agregar sección
+        </Button>
 
         <Paper sx={{ p: 2 }}>
           <Stack spacing={0.5} alignItems="flex-end">
@@ -1132,7 +1298,7 @@ export function AdminBudgetDetailPage() {
                       }}
                     />
                   }
-                  label={`${m.productSku} — ${m.productName} (×${remaining} ${displayUnitLabel(m.unit)})`}
+                  label={`${m.productName}${m.productSku ? ` (${m.productSku})` : ""} (×${remaining} ${displayUnitLabel(m.unit)})`}
                 />
               );
             })}
